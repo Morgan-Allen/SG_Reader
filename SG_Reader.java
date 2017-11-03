@@ -112,6 +112,7 @@ public class SG_Reader {
       h.recordsUsed = readInt();
       h.unknown2    = readInt();
       
+      say("");
       say("  File size: "+h.filesize   );
       say("  Version:   "+h.version    );
       say("  # Records: "+h.numRecords );
@@ -127,6 +128,7 @@ public class SG_Reader {
       say("  Total file size: "+h.totalFilesize);
       say("  Inner 555 size:  "+h.inner555Size );
       say("  Outer 555 size:  "+h.outer555Size );
+      say("");
       
       for (int i = 0; i < h.index.length; i++) {
         h.index[i] = readShort();
@@ -237,33 +239,39 @@ public class SG_Reader {
   void printObjectFields(Object o, String indent) throws Exception {
     if (! verbose) return;
     
-    Field  fields[] = o.getClass().getDeclaredFields();
-    Object values[] = new Object[fields.length];
+    ArrayList <Field> fields = new ArrayList <Field> ();
     int maxNameLength = -1;
     
-    for (int i = 0; i < fields.length; i++) {
-      if (fields[i].getType().isArray()) continue;
-      String name = fields[i].getName();
-      values[i]   = fields[i].get(o);
+    for (Field f : o.getClass().getDeclaredFields()) {
+      Class t = f.getType();
+      String name = f.getName();
       if (name.startsWith("unknown")) continue;
-      if (name.startsWith("this")) continue;
+      if (name.startsWith("this"   )) continue;
       int nameLen = name.length();
       if (maxNameLength < nameLen) maxNameLength = nameLen;
+      fields.add(f);
     }
     
     StringBuffer out = new StringBuffer();
-    for (int i = 0; i < fields.length; i++) {
-      if (fields[i].getType().isArray()) continue;
-      String name  = fields[i].getName();
-      if (name.startsWith("unknown")) continue;
-      if (name.startsWith("this")) continue;
+    for (Field f : fields) {
+      Class  type  = f.getType();
+      String name  = f.getName();
+      Object value = f.get(o);
+      
       out.append(indent);
       out.append(name);
       out.append(":");
+      
       for(int p = maxNameLength + 1 - name.length(); p-- > 0;) {
         out.append(' ');
       }
-      out.append(values[i].toString());
+      if (type.isArray()) {
+        out.append("["+type.getComponentType());
+        out.append(" x"+Array.getLength(value)+"]");
+      }
+      else {
+        out.append(value.toString());
+      }
       out.append("\n");
     }
     
