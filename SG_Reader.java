@@ -1,5 +1,8 @@
 
+
 import java.io.*;
+import java.lang.reflect.*;
+import java.util.ArrayList;
 
 
 
@@ -28,6 +31,7 @@ public class SG_Reader {
     
     short  index  [] = new short [300];
     Bitmap bitmaps[] = new Bitmap[100];
+    ImageRecord records[];
   }
   
   //  200 bytes total here.
@@ -45,15 +49,19 @@ public class SG_Reader {
     int endIndex;
     
     byte remainder[] = new byte[64];
+    
+    ArrayList <ImageRecord> records = new ArrayList <ImageRecord> ();
+    public String toString() { return name; }
   }
-  
-  //  4 + 16 + 8 + 12 + 24
   
   //  64 bytes total here.
   class ImageRecord {
+    Bitmap belongs;
+    String label;
+    
     int offset;
     int dataLength;
-    int lengthRawData;
+    int lengthNoComp;
     int unknown1;
     int inverseOffset;
     
@@ -83,9 +91,11 @@ public class SG_Reader {
   /**  File parsing routines-
     */
   DataInputStream IS;
+  boolean verbose;
   
   
-  void readFile(String filename) {
+  void readFile(String filename, boolean verbose) {
+    this.verbose = verbose;
     say("\nReading SG File: "+filename);
     
     try {
@@ -121,38 +131,34 @@ public class SG_Reader {
       for (int i = 0; i < h.index.length; i++) {
         h.index[i] = readShort();
       }
+      
       for (int i = 0; i < h.bitmaps.length; i++) {
-        h.bitmaps[i] = readBitmap();
+        Bitmap b = h.bitmaps[i] = new Bitmap();
+        slurpObjectFields(b);
+        
+        b.name    = new String(b.nameChars   , "UTF-8");
+        b.comment = new String(b.commentChars, "UTF-8");
+        
+        say("\n  Loaded Bitmap...");
+        printObjectFields(b, "    ");
+      }
+      
+      h.records = new ImageRecord[h.numRecords];
+      for (int i = 0; i < h.numRecords; i++) {
+        ImageRecord r = h.records[i] = new ImageRecord();
+        slurpObjectFields(r);
+        
+        r.belongs = h.bitmaps[r.bitmapID];
+        r.label   = r.belongs.name+" #"+r.belongs.records.size();
+        r.belongs.records.add(r);
+        
+        say("\n  Loaded Image Record...");
+        printObjectFields(r, "    ");
       }
     }
     catch (Exception e) {
       say("Problem: "+e);
     }
-  }
-  
-  Bitmap readBitmap() throws Exception {
-    
-    Bitmap b = new Bitmap();
-    readBytes(b.nameChars   );
-    readBytes(b.commentChars);
-    b.name       = new String(b.nameChars, "UTF-8");
-    b.comment    = new String(b.commentChars, "UTF-8");
-    b.width      = readInt();
-    b.height     = readInt();
-    b.numImages  = readInt();
-    b.startIndex = readInt();
-    b.endIndex   = readInt();
-    readBytes(b.remainder);
-    
-    say("\n  Reading Bitmap...");
-    say("    Name:     "+b.name      );
-    say("    Comment:  "+b.comment   );
-    say("    Width:    "+b.width     );
-    say("    Height:   "+b.height    );
-    say("    # Images: "+b.numImages );
-    say("    @ Start:  "+b.startIndex);
-    say("    @ End:    "+b.endIndex  );
-    return b;
   }
   
   
@@ -183,12 +189,85 @@ public class SG_Reader {
     return (byte) read();
   }
   
-  void readBytes(byte bytes[]) throws Exception {
-    IS.read(bytes);
+  boolean readBoolean() throws Exception {
+    return read() != 0;
   }
   
+  byte[] readBytes(byte bytes[]) throws Exception {
+    IS.read(bytes);
+    return bytes;
+  }
+  
+  
+  
+  /**  Including for debug/printout purposes:
+    */
   void say(String s) {
+    if (! verbose) return;
     System.out.println(s);
+  }
+  
+  
+  void slurpObjectFields(Object o) throws Exception {
+    Field fields[] = o.getClass().getDeclaredFields();
+    
+    for (Field f : fields) {
+      Class t = f.getType();
+      if (t.isArray()) {
+        Class  a      = t.getComponentType();
+        Object array  = f.get(o);
+        int    length = Array.getLength(array);
+        
+        for (int i = 0; i < length; i++) {
+          if (a == Integer.TYPE) Array.setInt    (array, i, readInt    ());
+          if (a == Short  .TYPE) Array.setShort  (array, i, readShort  ());
+          if (a == Byte   .TYPE) Array.setByte   (array, i, readChar   ());
+          if (a == Boolean.TYPE) Array.setBoolean(array, i, readBoolean());
+        }
+        continue;
+      }
+      if (t == Integer.TYPE) f.set(o, readInt    ());
+      if (t == Short  .TYPE) f.set(o, readShort  ());
+      if (t == Byte   .TYPE) f.set(o, readChar   ());
+      if (t == Boolean.TYPE) f.set(o, readBoolean());
+    }
+  }
+  
+  
+  void printObjectFields(Object o, String indent) throws Exception {
+    if (! verbose) return;
+    
+    Field  fields[] = o.getClass().getDeclaredFields();
+    Object values[] = new Object[fields.length];
+    int maxNameLength = -1;
+    
+    for (int i = 0; i < fields.length; i++) {
+      if (fields[i].getType().isArray()) continue;
+      String name = fields[i].getName();
+      values[i]   = fields[i].get(o);
+      if (name.startsWith("unknown")) continue;
+      if (name.startsWith("this")) continue;
+      int nameLen = name.length();
+      if (maxNameLength < nameLen) maxNameLength = nameLen;
+    }
+    
+    StringBuffer out = new StringBuffer();
+    for (int i = 0; i < fields.length; i++) {
+      if (fields[i].getType().isArray()) continue;
+      String name  = fields[i].getName();
+      if (name.startsWith("unknown")) continue;
+      if (name.startsWith("this")) continue;
+      out.append(indent);
+      out.append(name);
+      out.append(":");
+      for(int p = maxNameLength + 1 - name.length(); p-- > 0;) {
+        out.append(' ');
+      }
+      out.append(values[i].toString());
+      out.append("\n");
+    }
+    
+    say(out.toString());
   }
   
   
@@ -197,7 +276,7 @@ public class SG_Reader {
     */
   public static void main(String args[]) {
     SG_Reader reader = new SG_Reader();
-    reader.readFile("C3 Files/C3_North.sg2");
+    reader.readFile("C3 Files/C3_North.sg2", true);
   }
   
 }
