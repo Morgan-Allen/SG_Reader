@@ -9,6 +9,8 @@ public class SG_Reader {
   
   /**  Data structures:
     */
+  
+  //  80 bytes total here.
   class Header {
     
     int filesize;
@@ -28,10 +30,11 @@ public class SG_Reader {
     Bitmap bitmaps[] = new Bitmap[100];
   }
   
+  //  200 bytes total here.
   class Bitmap {
     
-    char nameChars   [] = new char[65];
-    char commentChars[] = new char[51];
+    byte nameChars   [] = new byte[65];
+    byte commentChars[] = new byte[51];
     String name;
     String comment;
     
@@ -41,12 +44,40 @@ public class SG_Reader {
     int startIndex;
     int endIndex;
     
-    byte remainder[] = new byte[74];
+    byte remainder[] = new byte[64];
   }
   
+  //  4 + 16 + 8 + 12 + 24
+  
+  //  64 bytes total here.
   class ImageRecord {
+    int offset;
+    int dataLength;
+    int lengthRawData;
+    int unknown1;
+    int inverseOffset;
+    
+    short width;
+    short height;
+    byte unknown2[] = new byte[6];
+    short numAnims;
+    short unknown3;
+    short spriteOffX;
+    short spriteOffY;
+    byte unknown4[] = new byte[10];
+    
+    boolean canReverse;
+    byte unknown5;
+    byte imageType;
+    boolean compressed;
+    boolean externalData;
+    boolean partCompressed;
+    byte unknown6[] = new byte[2];
+    byte bitmapID;
+    byte unknown7;
+    byte animSpeedID;
+    byte unknown8[] = new byte[5];
   }
-  
   
   
   /**  File parsing routines-
@@ -86,10 +117,42 @@ public class SG_Reader {
       say("  Total file size: "+h.totalFilesize);
       say("  Inner 555 size:  "+h.inner555Size );
       say("  Outer 555 size:  "+h.outer555Size );
+      
+      for (int i = 0; i < h.index.length; i++) {
+        h.index[i] = readShort();
+      }
+      for (int i = 0; i < h.bitmaps.length; i++) {
+        h.bitmaps[i] = readBitmap();
+      }
     }
     catch (Exception e) {
       say("Problem: "+e);
     }
+  }
+  
+  Bitmap readBitmap() throws Exception {
+    
+    Bitmap b = new Bitmap();
+    readBytes(b.nameChars   );
+    readBytes(b.commentChars);
+    b.name       = new String(b.nameChars, "UTF-8");
+    b.comment    = new String(b.commentChars, "UTF-8");
+    b.width      = readInt();
+    b.height     = readInt();
+    b.numImages  = readInt();
+    b.startIndex = readInt();
+    b.endIndex   = readInt();
+    readBytes(b.remainder);
+    
+    say("\n  Reading Bitmap...");
+    say("    Name:     "+b.name      );
+    say("    Comment:  "+b.comment   );
+    say("    Width:    "+b.width     );
+    say("    Height:   "+b.height    );
+    say("    # Images: "+b.numImages );
+    say("    @ Start:  "+b.startIndex);
+    say("    @ End:    "+b.endIndex  );
+    return b;
   }
   
   
@@ -118,6 +181,10 @@ public class SG_Reader {
   
   byte readChar() throws Exception {
     return (byte) read();
+  }
+  
+  void readBytes(byte bytes[]) throws Exception {
+    IS.read(bytes);
   }
   
   void say(String s) {
