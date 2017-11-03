@@ -290,10 +290,16 @@ public class SG_Reader {
   /**  Main execution method-
     */
   public static void main(String args[]) {
+    
     XML testX = XML.node("text");
-    testX.setContent("Here's some sample text!");
     testX.set("type", "info");
     testX.set("format", "latin_alphabet");
+    testX.setContent("Here's some sample text!");
+    
+    XML kid = XML.node("passage");
+    kid.set("format", "numeric");
+    kid.setContent("1010101010001111");
+    testX.addChild(kid);
     
     XML.writeXML(testX, "test_xml.xml");
     

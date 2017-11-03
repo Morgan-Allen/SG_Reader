@@ -137,19 +137,40 @@ public class XML {
     catch (Exception e) {}
   }
   
-  private void writeToFile(FileWriter writer, String indent) throws Exception {
+  
+  public void writeToFile(FileWriter writer, String indent) throws Exception {
     StringBuffer out = new StringBuffer();
     
-    out.append("<"+tag);
+    out.append("\n"+indent+"<"+tag);
+    
+    int maxAttLen = -1;
+    for (String att : attributes) {
+      if (att.length() > maxAttLen) maxAttLen = att.length();
+    }
     for (int i = 0; i < attributes.length; i++) {
       String att = attributes[i], val = values[i];
-      out.append(" "+att+"=\""+val+"\"");
+      out.append("\n"+indent+"  "+att);
+      int pad = 1 + maxAttLen - att.length();
+      while (pad-- > 0) out.append(' ');
+      out.append("= \""+val+"\"");
     }
-    out.append(">");
     
-    out.append("</"+tag+">");
+    out.append("\n"+indent+">\n");
     
+    if (content != null) {
+      out.append(indent+"  ");
+      out.append(content);
+    }
     writer.write(out.toString());
+    
+    for (XML child : children) {
+      child.writeToFile(writer, indent+"  ");
+    }
+    
+    out.delete(0, out.length());
+    out.append("\n"+indent+"</"+tag+">");
+    writer.write(out.toString());
+    
   }
   
   
