@@ -45,6 +45,7 @@ public class XML {
   public XML parent()       { return parent; }
   
   
+  
   /**  Returns the first child matching the given tag.
     */
   public XML child(String tag) {
@@ -82,21 +83,73 @@ public class XML {
     return null;
   }
   
-  
   public boolean getBool(String label) {
     final String val = value(label);
     return (val == null) ? false : Boolean.parseBoolean(val);
   }
-  
   
   public float getFloat(String label) {
     final String val = value(label);
     return (val == null) ? 1 : Float.parseFloat(val);
   }
   
-  
   public int getInt(String label) {
     return (int) getFloat(label);
+  }
+  
+  
+  
+  /**  Construction methods-
+    */
+  public static XML node(String tag) {
+    XML node = new XML();
+    node.tag = tag;
+    return node;
+  }
+  
+  public void setTag(String tag) {
+    this.tag = tag;
+  }
+  
+  public void setContent(String content) {
+    this.content = content;
+  }
+  
+  public void set(String att, String value) {
+    attributeList.add(att  );
+    valueList    .add(value);
+  }
+  
+  public void addChild(XML node) {
+    childList.add(node);
+  }
+  
+  
+  public static void writeXML(XML root, String outFile) {
+    root.compile(0);
+    try {
+      final File baseFile = new File(outFile);
+      final FileWriter FW = new FileWriter(baseFile);
+      root.writeToFile(FW, "");
+      FW.flush();
+      FW.close();
+    }
+    catch (Exception e) {}
+  }
+  
+  private void writeToFile(FileWriter writer, String indent) throws Exception {
+    StringBuffer out = new StringBuffer();
+    
+    out.append("<"+tag);
+    for (int i = 0; i < attributes.length; i++) {
+      String att = attributes[i], val = values[i];
+      out.append(" "+att+"=\""+val+"\"");
+    }
+    out.append(">");
+    
+    out.append("</"+tag+">");
+    
+    writer.write(out.toString());
   }
   
   

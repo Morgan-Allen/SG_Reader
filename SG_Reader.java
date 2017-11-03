@@ -279,15 +279,37 @@ public class SG_Reader {
   }
   
   
+  void writeObjectFieldsToXML(Object o, XML node) {
+    for (Field f : o.getClass().getDeclaredFields()) {
+      
+    }
+  }
+  
+  
   
   /**  Main execution method-
     */
   public static void main(String args[]) {
-    SG_Reader reader = new SG_Reader();
-    reader.readFile("C3 Files/C3_North.sg2", true);
+    XML testX = XML.node("text");
+    testX.setContent("Here's some sample text!");
+    testX.set("type", "info");
+    testX.set("format", "latin_alphabet");
+    
+    XML.writeXML(testX, "test_xml.xml");
+    
+    //SG_Reader reader = new SG_Reader();
+    //reader.readFile("C3 Files/C3_North.sg2", true);
   }
   
 }
+
+
+
+
+
+
+
+
 
 
 
