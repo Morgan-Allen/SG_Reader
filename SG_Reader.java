@@ -92,6 +92,7 @@ public class SG_Reader {
     */
   DataInputStream IS;
   boolean verbose;
+  Header header;
   
   
   void readFile(String filename, boolean verbose) {
@@ -104,7 +105,7 @@ public class SG_Reader {
       BufferedInputStream BS = new BufferedInputStream(FS);
       IS = new DataInputStream(BS);
       
-      Header h = new Header();
+      Header h = this.header = new Header();
       h.filesize    = readInt();
       h.version     = readInt();
       h.unknown1    = readInt();
@@ -279,32 +280,45 @@ public class SG_Reader {
   }
   
   
-  void writeObjectFieldsToXML(Object o, XML node) {
+  XML objectAsXML(Object o) throws Exception {
+    XML node = XML.node(o.getClass().getName());
     for (Field f : o.getClass().getDeclaredFields()) {
-      
+      Class  t = f.getType();
+      Object v = f.get(o);
+      String att = f.getName(), val = v == null ? "None" : v.toString();
+      node.set(att, val);
     }
+    return node;
   }
   
   
   
   /**  Main execution method-
     */
+  
   public static void main(String args[]) {
     
-    XML testX = XML.node("text");
-    testX.set("type", "info");
-    testX.set("format", "latin_alphabet");
-    testX.setContent("Here's some sample text!");
+    SG_Reader reader = new SG_Reader();
+    reader.readFile("C3 Files/C3_North.sg2", false);
+    int maxWritten = 10;
     
-    XML kid = XML.node("passage");
-    kid.set("format", "numeric");
-    kid.setContent("1010101010001111");
-    testX.addChild(kid);
-    
-    XML.writeXML(testX, "test_xml.xml");
-    
-    //SG_Reader reader = new SG_Reader();
-    //reader.readFile("C3 Files/C3_North.sg2", true);
+    try {
+      final File baseFile = new File("test_xml.xml");
+      final FileWriter FW = new FileWriter(baseFile);
+      
+      for (Object writes : reader.header.records) {
+        XML asXML = reader.objectAsXML(writes);
+        asXML.writeToFile(FW, "");
+        if (maxWritten-- == 0) break;
+      }
+      
+      FW.flush();
+      FW.close();
+    }
+    catch (Exception e) {
+      System.out.print("Problem: "+e);
+      e.printStackTrace();
+    }
   }
   
 }

@@ -101,9 +101,15 @@ public class XML {
   
   /**  Construction methods-
     */
-  public static XML node(String tag) {
+  public static XML node(String tag, Object... args) {
     XML node = new XML();
     node.tag = tag;
+    
+    for (int i = 0; i < args.length;) {
+      String att = args[i++].toString();
+      String val = args[i++].toString();
+      node.set(att, val);
+    }
     return node;
   }
   
@@ -139,8 +145,9 @@ public class XML {
   
   
   public void writeToFile(FileWriter writer, String indent) throws Exception {
-    StringBuffer out = new StringBuffer();
+    compile(0);
     
+    StringBuffer out = new StringBuffer();
     out.append("\n"+indent+"<"+tag);
     
     int maxAttLen = -1;
@@ -168,7 +175,9 @@ public class XML {
     }
     
     out.delete(0, out.length());
-    out.append("\n"+indent+"</"+tag+">");
+    boolean anyKids = content != null || children.length > 0;
+    if (anyKids) out.append("\n");
+    out.append(indent+"</"+tag+">");
     writer.write(out.toString());
     
   }
@@ -350,6 +359,8 @@ public class XML {
   /**  Transforms the temporary member lists into proper arrays.
     */
   final private XML compile(int depth) {
+    if (children != null) return this;
+    
     children   = childList    .toArray(new XML   [0]);
     attributes = attributeList.toArray(new String[0]);
     values     = valueList    .toArray(new String[0]);
@@ -375,7 +386,30 @@ public class XML {
     for (XML child : children) child.compile(depth + 1);
     return this;
   }
+  
+  
+  
+  /**  Simple testing routine-
+    */
+  public static void main(String args[]) {
+
+    XML testX = XML.node("text");
+    testX.set("type", "info");
+    testX.set("format", "latin_alphabet");
+    testX.setContent("Here's some sample text!");
+    
+    XML kid = XML.node("passage");
+    kid.set("format", "numeric");
+    kid.setContent("1010101010001111");
+    testX.addChild(kid);
+    
+    XML.writeXML(testX, "test_xml.xml");
+  }
+  
 }
+
+
+
 
 
 

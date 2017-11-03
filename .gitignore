@@ -2,5 +2,7 @@
 
 *.class
 *.txt
+.classpath
+.project
 citybuilding-tools-master/
 C3 Files/
