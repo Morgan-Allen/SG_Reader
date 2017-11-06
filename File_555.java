@@ -131,30 +131,30 @@ public class File_555 {
   static void processIsometricBase(byte rawData[], File_SG.ImageRecord r) {
     
     BufferedImage store = r.extracted;
-    int wide        = store.getWidth();
-    int high        = (wide + 2) / 2;
-    boolean bigTile = r.file.version == File_SG.VERSION_EM;
-    int tileWide    = bigTile ? BIG_TILE_WIDE  : TILE_WIDE ;
-    int tileHigh    = bigTile ? BIG_TILE_HIGH  : TILE_HIGH ;
-    int tileBytes   = bigTile ? BIG_TILE_BYTES : TILE_BYTES;
-    int tilesAcross = high / tileHigh;
+    int wide      = store.getWidth();
+    int high      = (wide + 2) / 2;
+    boolean big   = r.file.version == File_SG.VERSION_EM;
+    int tileWide  = big ? BIG_TILE_WIDE  : TILE_WIDE ;
+    int tileHigh  = big ? BIG_TILE_HIGH  : TILE_HIGH ;
+    int tileBytes = big ? BIG_TILE_BYTES : TILE_BYTES;
+    int tileSpan  = high / tileHigh;
     
     if ((wide + 2) * high != r.lengthNoComp) {
       File_SG.say("Isometric data size did not match: "+r.label);
       return;
     }
 
-    int maxY    = (tilesAcross * 2) - 1;
+    int maxY    = (tileSpan * 2) - 1;
     int offsetY = store.getHeight() - high;
     int offsetX = 0;
     int index   = 0;
     
     for (int y = 0; y < maxY; y++) {
-      boolean lower = y < tilesAcross;
-      
-      int maxX = lower ? (y + 1) : (tilesAcross * 2) - (y + 1);
-      offsetX  = lower ? (tilesAcross - (y + 1)) : ((y + 1) - tilesAcross);
-      offsetX  *= tileHigh;
+      boolean lower = y < tileSpan;
+      int nextY = y + 1;
+      int maxX  = lower ? nextY : ((tileSpan * 2) - nextY);
+      offsetX   = lower ? (tileSpan - nextY) : (nextY - tileSpan);
+      offsetX   *= tileHigh;
       
       for (int x = 0; x < maxX; x++) {
         processIsometricTile(
@@ -175,21 +175,12 @@ public class File_555 {
     int offX, int offY, int tileWide, int tileHigh
   ) {
     BufferedImage store = r.extracted;
-    int half_height = tileHigh / 2;
-    int x, y, i = 0;
     
-    for (y = 0; y < half_height; y++) {
-      int start = tileHigh - (2 * (y + 1));
-      int end   = tileWide - start;
-      for (x = start; x < end; x++, i += 2) {
-        int ARGB = bytesToARGB(rawData, offset + i);
-        store.setRGB(offX + x, offY + y, ARGB);
-      }
-    }
-    for (y = half_height; y < tileHigh; y++) {
-      int start = (2 * y) - tileHigh;
-      int end   = tileWide - start;
-      for (x = start; x < end; x++, i += 2) {
+    for (int y = 0, i = 0; y < tileHigh; y++) {
+      int startX = (2 * y) - tileHigh;
+      if (startX < 0) { startX *= -1; startX -= 2; }
+      
+      for (int x = startX; x < tileWide - startX; x++, i += 2) {
         int ARGB = bytesToARGB(rawData, offset + i);
         store.setRGB(offX + x, offY + y, ARGB);
       }
