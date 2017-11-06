@@ -42,18 +42,18 @@ public class File_555 {
       //  transparent upper and a diagonally-packed lower half, so they need
       //  special treatment:
       if (record.imageType == TYPE_ISOMETRIC) {
-        processIsometricImage(rawData, record);
+        readIsometricImage(rawData, record);
       }
       //
       //  Compression is used for any images with transparency, which means any
       //  other walker-sprites in practice:
       else if (record.compressed) {
-        processSpriteImage(rawData, record);
+        readSpriteImage(rawData, record);
       }
       //
       //  And finally, plain images are stored without compression:
       else {
-        processPlainImage(rawData, record);
+        readPlainImage(rawData, record);
       }
       return image;
     }
@@ -62,19 +62,19 @@ public class File_555 {
   }
   
   
-  static void processIsometricImage(byte rawData[], File_SG.ImageRecord r) {
-    processIsometricBase(rawData, r);
+  static void readIsometricImage(byte rawData[], File_SG.ImageRecord r) {
+    readIsometricBase(rawData, r);
     int done = r.lengthNoComp;
-    processTransparentImage(rawData, done, r, r.dataLength - done);
+    readTransparentImage(rawData, done, r, r.dataLength - done);
   }
   
   
-  static void processSpriteImage(byte rawData[], File_SG.ImageRecord r) {
-    processTransparentImage(rawData, 0, r, r.dataLength);
+  static void readSpriteImage(byte rawData[], File_SG.ImageRecord r) {
+    readTransparentImage(rawData, 0, r, r.dataLength);
   }
   
   
-  static void processPlainImage(byte rawData[], File_SG.ImageRecord r) {
+  static void readPlainImage(byte rawData[], File_SG.ImageRecord r) {
     BufferedImage store = r.extracted;
     for (int x, y = 0, i = 0; y < store.getHeight(); y++) {
       for (x = 0; x < store.getWidth(); x++, i += 2) {
@@ -85,7 +85,7 @@ public class File_555 {
   }
   
   
-  static void processTransparentImage(
+  static void readTransparentImage(
     byte rawData[], int offset, File_SG.ImageRecord r, int length
   ) {
     BufferedImage store = r.extracted;
@@ -128,7 +128,7 @@ public class File_555 {
     BIG_TILE_BYTES = 3200
   ;
   
-  static void processIsometricBase(byte rawData[], File_SG.ImageRecord r) {
+  static void readIsometricBase(byte rawData[], File_SG.ImageRecord r) {
     
     BufferedImage store = r.extracted;
     int wide      = store.getWidth();
@@ -157,7 +157,7 @@ public class File_555 {
       offsetX   *= tileHigh;
       
       for (int x = 0; x < maxX; x++) {
-        processIsometricTile(
+        readIsometricTile(
           rawData, index * tileBytes, r,
           offsetX, offsetY,
           tileWide, tileHigh
@@ -170,7 +170,7 @@ public class File_555 {
   }
   
   
-  static void processIsometricTile(
+  static void readIsometricTile(
     byte rawData[], int offset, File_SG.ImageRecord r,
     int offX, int offY, int tileWide, int tileHigh
   ) {
@@ -188,22 +188,44 @@ public class File_555 {
   }
   
   
+  
+  /**  Reading and writing individual pixel values:
+    */
+  final static int
+    BITS_5  = (1 << 5) - 1,
+    MASK_R5 = BITS_5 << 10,
+    MASK_G5 = BITS_5 << 5 ,
+    MASK_B5 = BITS_5 << 0 ,
+    BITS_8  = 0xff,
+    MASK_R8 = BITS_8 << 16,
+    MASK_G8 = BITS_8 << 8 ,
+    MASK_B8 = BITS_8 << 0 
+  ;
+  
+  
   static int bytesToARGB(byte rawData[], int offset) {
     if (offset + 1 >= rawData.length) return 0;
     
     int color = (rawData[offset] & 0xff) | ((rawData[offset + 1] & 0xff) << 8);
     int RGBA  = 0xff000000;
     
-    // Red: bits 11-15, should go to bits 17-24
-    RGBA |= ((color & 0x7c00) << 9) | ((color & 0x7000) << 4);
-    
-    // Green: bits 6-10, should go to bits 9-16
-    RGBA |= ((color & 0x3e0) << 6) | ((color & 0x300));
-    
-    // Blue: bits 1-5, should go to bits 1-8
-    RGBA |= ((color & 0x1f) << 3) | ((color & 0x1c) >> 2);
+    RGBA |= (color & MASK_R5) << (6 + 3);
+    RGBA |= (color & MASK_G5) << (3 + 3);
+    RGBA |= (color & MASK_B5) << (0 + 3);
     
     return RGBA;
+  }
+  
+  
+  static void ARGBtoBytes(int ARGB, byte storeData[], int offset) {
+    
+    int stored = 0;
+    stored |= ((ARGB & MASK_R8) >> 6) & MASK_R5;
+    stored |= ((ARGB & MASK_G8) >> 3) & MASK_G5;
+    stored |= ((ARGB & MASK_B8) >> 0) & MASK_B5;
+    
+    storeData[offset    ] = (byte) ((stored >> 0) & 0xff);
+    storeData[offset + 1] = (byte) ((stored >> 8) & 0xff);
   }
   
   

@@ -504,13 +504,17 @@ public class File_SG {
   /**  Main execution method-
     */
   public static void main(String args[]) {
+    //*
     File_SG.unpackSingleImage(
       "C3 Files/", "C3_North.sg2", VERSION_C3, "Housng1a_46", "housing_46.png"
     );
+    //*/
     
-    //File_SG.unpackSG(
-    //  "C3 Files/", "C3_North.sg2", VERSION_C3, "output_sg_north/"
-    //);
+    /*
+    File_SG.unpackSG(
+      "C3 Files/", "C3_North.sg2", VERSION_C3, "output_sg_north/"
+    );
+    //*/
     
     //  Then... if the user wants to modify something, they make a copy of that
     //  folder, tweak the relevant images or attributes, and then recompile the
