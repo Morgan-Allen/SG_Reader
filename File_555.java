@@ -78,22 +78,29 @@ public class File_555 {
   /**  Utilities for reading/writing plain images-
     */
   static void readPlainImage(byte rawData[], File_SG.ImageRecord r) {
-    BufferedImage store = r.extracted;
-    for (int x, y = 0, i = 0; y < store.getHeight(); y++) {
-      for (x = 0; x < store.getWidth(); x++, i += 2) {
-        int ARGB = bytesToARGB(rawData, i);
-        store.setRGB(x, y, ARGB);
-      }
-    }
+    processPlainImage(rawData, r, false);
   }
   
   
   static void writePlainImage(File_SG.ImageRecord r, byte storeData[]) {
-    BufferedImage img = r.extracted;
-    for (int x, y = 0, i = 0; y < img.getHeight(); y++) {
-      for (x = 0; x < img.getWidth(); x++, i += 2) {
-        int ARGB = img.getRGB(x, y);
-        ARGBtoBytes(ARGB, storeData, i);
+    processPlainImage(storeData, r, true);
+  }
+  
+  
+  static void processPlainImage(
+    byte rawData[], File_SG.ImageRecord r, boolean write
+  ) {
+    BufferedImage store = r.extracted;
+    for (int x, y = 0, i = 0; y < store.getHeight(); y++) {
+      for (x = 0; x < store.getWidth(); x++, i += 2) {
+        if (write) {
+          int ARGB = store.getRGB(x, y);
+          ARGBtoBytes(ARGB, rawData, i);
+        }
+        else {
+          int ARGB = bytesToARGB(rawData, i);
+          store.setRGB(x, y, ARGB);
+        }
       }
     }
   }
@@ -195,6 +202,16 @@ public class File_555 {
   ;
   
   static void readIsometricBase(byte rawData[], File_SG.ImageRecord r) {
+    processIsometricBase(rawData, r, false);
+  }
+  
+  static void writeIsometricBase(File_SG.ImageRecord r, byte storeData[]) {
+    processIsometricBase(storeData, r, true);
+  }
+  
+  static void processIsometricBase(
+    byte rawData[], File_SG.ImageRecord r, boolean write
+  ) {
     
     BufferedImage store = r.extracted;
     int wide      = store.getWidth();
@@ -223,10 +240,11 @@ public class File_555 {
       offsetX   *= tileHigh;
       
       for (int x = 0; x < maxX; x++) {
-        readIsometricTile(
+        processIsometricTile(
           rawData, index * tileBytes, r,
           offsetX, offsetY,
-          tileWide, tileHigh
+          tileWide, tileHigh,
+          write
         );
         index += 1;
         offsetX += tileWide + 2;
@@ -236,9 +254,9 @@ public class File_555 {
   }
   
   
-  static void readIsometricTile(
+  static void processIsometricTile(
     byte rawData[], int offset, File_SG.ImageRecord r,
-    int offX, int offY, int tileWide, int tileHigh
+    int offX, int offY, int tileWide, int tileHigh, boolean write
   ) {
     BufferedImage store = r.extracted;
     
@@ -247,8 +265,14 @@ public class File_555 {
       if (startX < 0) { startX *= -1; startX -= 2; }
       
       for (int x = startX; x < tileWide - startX; x++, i += 2) {
-        int ARGB = bytesToARGB(rawData, offset + i);
-        store.setRGB(offX + x, offY + y, ARGB);
+        if (write) {
+          int ARGB = store.getRGB(offX + x, offY + y);
+          ARGBtoBytes(ARGB, rawData, offset + i);
+        }
+        else {
+          int ARGB = bytesToARGB(rawData, offset + i);
+          store.setRGB(offX + x, offY + y, ARGB);
+        }
       }
     }
   }
