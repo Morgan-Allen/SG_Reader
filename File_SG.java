@@ -201,7 +201,7 @@ public class File_SG {
       
       r.file    = this;
       r.belongs = h.bitmaps[r.bitmapID];
-      r.label   = r.belongs.name+" #"+r.belongs.records.size();
+      r.label   = noSuffix(r.belongs.name)+"_"+r.belongs.records.size();
       r.belongs.records.add(r);
       
       report("\n  Loaded Image Record...");
@@ -427,15 +427,12 @@ public class File_SG {
         MW.flush();
         MW.close();
         
-        //  TODO:  Implement this
-        /*
-        
         for (ImageRecord record : map.records) {
           BufferedImage image = File_555.extractImage(record, fileAccess);
+          if (image == null) continue;
           String imgName = record.label+".png";
           File_555.saveImage(image, outputPath+baseMapName+"/"+imgName);
         }
-        //*/
       }
       fileAccess.close();
     }

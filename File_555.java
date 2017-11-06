@@ -4,6 +4,7 @@ import java.io.*;
 import java.awt.*;
 import java.awt.image.*;
 import javax.swing.*;
+import javax.imageio.*;
 
 
 
@@ -19,6 +20,11 @@ public class File_555 {
     File_SG.ImageRecord record,
     RandomAccessFile fileAccess
   ) {
+    //
+    //  TODO:  Allow for loading from alternative 555 files!
+    if (record.externalData) return null;
+    if (record.width == 0 || record.height == 0) return null;
+    
     try {
       BufferedImage image = record.extracted = new BufferedImage(
         record.width, record.height,
@@ -27,8 +33,6 @@ public class File_555 {
       //
       //  TODO:  In the case of later versions of this format, there may be
       //  extra transparency pixels.  Investigate.
-      //
-      //  TODO:  Also, allow for loading from alternative 555 files...
       byte rawData[] = new byte[record.dataLength];
       fileAccess.seek(record.offset);
       fileAccess.read(rawData);
@@ -211,6 +215,9 @@ public class File_555 {
   }
   
   
+  
+  /**  Dealing with the extracted images:
+    */
   static void displayImage(final BufferedImage image) {
     JFrame frame = new JFrame();
     JPanel pane = new JPanel() {
@@ -232,7 +239,23 @@ public class File_555 {
     frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
   }
   
+  
+  static void saveImage(BufferedImage image, String outPath) {
+    try {
+      File outputFile = new File(outPath);
+      ImageIO.write(image, "png", outputFile);
+    }
+    catch (Exception e) {
+      File_SG.say("Could not save: "+outPath+", problem: "+e);
+      return;
+    }
+  }
+  
 }
+
+
+
+
 
 
 
