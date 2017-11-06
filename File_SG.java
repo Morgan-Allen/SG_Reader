@@ -3,18 +3,20 @@
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.ArrayList;
+import java.awt.image.BufferedImage;
 
 
 
 
-public class SG_Reader {
+public class File_SG {
   
   
   /**  Data structures:
     */
   
   //  80 bytes total here.
-  class Header {
+  static class Header {
+    File_SG file;
     
     int filesize;
     int version;
@@ -35,7 +37,8 @@ public class SG_Reader {
   }
   
   //  200 bytes total here.
-  class Bitmap {
+  static class Bitmap {
+    File_SG file;
     
     byte nameChars   [] = new byte[65];
     byte commentChars[] = new byte[51];
@@ -55,7 +58,10 @@ public class SG_Reader {
   }
   
   //  64 bytes total here.
-  class ImageRecord {
+  static class ImageRecord {
+    File_SG file;
+    BufferedImage extracted;
+    
     Bitmap belongs;
     String label;
     
@@ -88,37 +94,49 @@ public class SG_Reader {
   }
   
   
+  /**  File IO/routines-
+    */
+  static DataInputStream inStream(String filename) {
+    try {
+      FileInputStream FS = new FileInputStream(filename);
+      BufferedInputStream BS = new BufferedInputStream(FS);
+      return new DataInputStream(BS);
+    }
+    catch (Exception e) { return null; }
+  }
+  
+  
+  static RandomAccessFile randomInStream(String filename) {
+    try { return new RandomAccessFile(filename, "r"); }
+    catch (Exception e) { return null; }
+  }
+  
+  
+  
   /**  File parsing routines-
     */
+  String filename;
   DataInputStream IS;
   boolean verbose;
   Header header;
   
   
   void readFile(String filename, boolean verbose) {
-    this.verbose = verbose;
+    this.filename = filename;
+    this.verbose  = verbose ;
     say("\nReading SG File: "+filename);
     
     try {
-      File reads = new File(filename);
-      FileInputStream FS = new FileInputStream(reads);
-      BufferedInputStream BS = new BufferedInputStream(FS);
-      IS = new DataInputStream(BS);
+      IS = inStream(filename);
       
       Header h = this.header = new Header();
-      h.filesize    = readInt();
-      h.version     = readInt();
-      h.unknown1    = readInt();
-      h.numRecords  = readInt();
-      h.recordsUsed = readInt();
-      h.unknown2    = readInt();
-      
-      say("");
-      say("  File size: "+h.filesize   );
-      say("  Version:   "+h.version    );
-      say("  # Records: "+h.numRecords );
-      say("  # Used:    "+h.recordsUsed);
-      
+      h.file          = this;
+      h.filesize      = readInt();
+      h.version       = readInt();
+      h.unknown1      = readInt();
+      h.numRecords    = readInt();
+      h.recordsUsed   = readInt();
+      h.unknown2      = readInt();
       h.totalFilesize = readInt();
       h.inner555Size  = readInt();
       h.outer555Size  = readInt();
@@ -126,6 +144,11 @@ public class SG_Reader {
         h.remainder[i] = readInt();
       }
       
+      say("");
+      say("  File size: "+h.filesize   );
+      say("  Version:   "+h.version    );
+      say("  # Records: "+h.numRecords );
+      say("  # Used:    "+h.recordsUsed);
       say("  Total file size: "+h.totalFilesize);
       say("  Inner 555 size:  "+h.inner555Size );
       say("  Outer 555 size:  "+h.outer555Size );
@@ -138,7 +161,8 @@ public class SG_Reader {
       for (int i = 0; i < h.bitmaps.length; i++) {
         Bitmap b = h.bitmaps[i] = new Bitmap();
         slurpObjectFields(b);
-        
+
+        b.file    = this;
         b.name    = new String(b.nameChars   , "UTF-8");
         b.comment = new String(b.commentChars, "UTF-8");
         
@@ -151,6 +175,7 @@ public class SG_Reader {
         ImageRecord r = h.records[i] = new ImageRecord();
         slurpObjectFields(r);
         
+        r.file    = this;
         r.belongs = h.bitmaps[r.bitmapID];
         r.label   = r.belongs.name+" #"+r.belongs.records.size();
         r.belongs.records.add(r);
@@ -202,15 +227,34 @@ public class SG_Reader {
   }
   
   
-  
-  /**  Including for debug/printout purposes:
-    */
   void say(String s) {
     if (! verbose) return;
     System.out.println(s);
   }
   
   
+  
+  /**  Utility methods for accessing records:
+    */
+  Bitmap bitmapWithLabel(String label) {
+    for (Bitmap b : header.bitmaps) if (b.name.equals(label)) {
+      return b;
+    }
+    return null;
+  }
+  
+  
+  ImageRecord recordWithLabel(String label) {
+    for (ImageRecord r : header.records) if (r.label.equals(label)) {
+      return r;
+    }
+    return null;
+  }
+  
+
+  
+  /**  Reflection-based utilities for reading/writing object fields:
+    */
   void slurpObjectFields(Object o) throws Exception {
     Field fields[] = o.getClass().getDeclaredFields();
     
@@ -298,22 +342,62 @@ public class SG_Reader {
   
   public static void main(String args[]) {
     
-    SG_Reader reader = new SG_Reader();
-    reader.readFile("C3 Files/C3_North.sg2", false);
-    int maxWritten = 10;
+    File_SG mainFile = new File_SG();
+    mainFile.readFile("C3 Files/C3_North.sg2", false);
+    
+    //  Okay, here's the plan:
+    //  You create a folder for each SG file.
+    //  You create a master XML that lists the header and each of the bitmaps.
+    //  You create sub-folders for each bitmap, with an XML index for all the
+    //  image-records.
+    //  You disgorge all the images into that sub-folder.
+    
+    //  Then... if the user wants to modify something, they make a copy of that
+    //  folder, tweak the relevant images or attributes, and then recompile the
+    //  S3 starting from the root XML in the root folder.
+    
+    
+    //  Supplemental info you might want to store:
+    //    -Exact filenames/locations for external 555 files
+    //    -Descriptive labels for exported building/walker/anim sprites
+    //  ...Where do I keep those?  TODO- figure it out.
+    
     
     try {
-      final File baseFile = new File("test_xml.xml");
-      final FileWriter FW = new FileWriter(baseFile);
+      File baseFile = new File("test_xml.xml");
+      FileWriter FW = new FileWriter(baseFile);
       
-      for (Object writes : reader.header.records) {
-        XML asXML = reader.objectAsXML(writes);
+      for (Bitmap writes : mainFile.header.bitmaps) {
+        XML asXML = mainFile.objectAsXML(writes);
         asXML.writeToFile(FW, "");
-        if (maxWritten-- == 0) break;
+        mainFile.say("Bitmap label: "+writes.name);
       }
       
       FW.flush();
       FW.close();
+      
+      baseFile = new File("test_records.xml");
+      FW = new FileWriter(baseFile);
+      
+      Bitmap commerce = mainFile.bitmapWithLabel("Commerce.bmp                                                     ");
+      for (Object writes : commerce.records) {
+        XML asXML = mainFile.objectAsXML(writes);
+        asXML.writeToFile(FW, "");
+      }
+      
+      FW.flush();
+      FW.close();
+      
+      //  ...This should be enough to start with.  Okay then.
+      
+      RandomAccessFile fileAccess = File_SG.randomInStream(
+        "C3 Files/C3_North.555"
+      );
+      ImageRecord record = mainFile.recordWithLabel("Commerce.bmp                                                      #157");
+      BufferedImage image = File_555.extractImage(record, fileAccess);
+      fileAccess.close();
+      
+      File_555.displayImage(image);
     }
     catch (Exception e) {
       System.out.print("Problem: "+e);
@@ -322,14 +406,6 @@ public class SG_Reader {
   }
   
 }
-
-
-
-
-
-
-
-
 
 
 
