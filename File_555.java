@@ -74,6 +74,9 @@ public class File_555 {
   }
   
   
+  
+  /**  Utilities for reading/writing plain images-
+    */
   static void readPlainImage(byte rawData[], File_SG.ImageRecord r) {
     BufferedImage store = r.extracted;
     for (int x, y = 0, i = 0; y < store.getHeight(); y++) {
@@ -85,6 +88,20 @@ public class File_555 {
   }
   
   
+  static void writePlainImage(File_SG.ImageRecord r, byte storeData[]) {
+    BufferedImage img = r.extracted;
+    for (int x, y = 0, i = 0; y < img.getHeight(); y++) {
+      for (x = 0; x < img.getWidth(); x++, i += 2) {
+        int ARGB = img.getRGB(x, y);
+        ARGBtoBytes(ARGB, storeData, i);
+      }
+    }
+  }
+  
+  
+  
+  /**  Utilities for reading/writing transparency-
+    */
   static void readTransparentImage(
     byte rawData[], int offset, File_SG.ImageRecord r, int length
   ) {
@@ -119,6 +136,55 @@ public class File_555 {
   }
   
   
+  static void writeTransparentImage(
+    File_SG.ImageRecord r, int length, byte storeData[], int offset
+  ) {
+    //  TODO:  You'll need a variable-length byte-buffer instead of an array,
+    //  if a fresh image of variable size is being encoded.
+    
+    //  TODO:  You'll also need to omit any pixels accounted for by an
+    //  isometric base!
+    
+    BufferedImage img = r.extracted;
+    boolean inGap = false;
+    int index          =  0;
+    int gapSize        =  0;
+    int fillStartIndex = -1;
+    
+    for (int x = 0; x < img.getWidth(); x++) {
+      for (int y = 0; y < img.getHeight(); y++) {
+        int pix = img.getRGB(x, y);
+        
+        if ((pix & 0xff000000) == 0) {
+          if (! inGap) {
+            if (fillStartIndex >= 0) {
+              storeData[fillStartIndex] = (byte) gapSize;
+            }
+            gapSize = 0;
+            inGap = true;
+          }
+          gapSize += 1;
+        }
+        else {
+          if (inGap) {
+            inGap = false;
+            storeData[index++] = (byte) 0xff;
+            storeData[index++] = (byte) gapSize;
+            fillStartIndex = index++;
+            gapSize = 0;
+          }
+          ARGBtoBytes(pix, storeData, index);
+          index += 2;
+          gapSize += 1;
+        }
+      }
+    }
+  }
+  
+  
+  
+  /**  Utilities for reading/writing isometric pixels-
+    */
   final static int
     TILE_WIDE      = 58  ,
     TILE_HIGH      = 30  ,
