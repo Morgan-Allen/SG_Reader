@@ -140,14 +140,25 @@ public class File_SG {
   
   /**  File parsing routines-
     */
+  final static int
+    VERSION_C3 = 0,
+    VERSION_PH = 1,
+    VERSION_ZE = 2,
+    VERSION_EM = 3
+  ;
+  
   String filename;
+  int version;
   DataInputStream IS;
   boolean verbose;
   Header header;
   
   
-  void readFile(String filename, boolean verbose) throws Exception {
+  void readFile(
+    String filename, int version, boolean verbose
+  ) throws Exception {
     this.filename = filename;
+    this.version  = version ;
     this.verbose  = verbose ;
     report("\nReading SG File: "+filename);
     
@@ -364,9 +375,10 @@ public class File_SG {
   
   
   
-  static void unpackSG(String basePath, String fileSG, String outputPath) {
+  static void unpackSG(
+    String basePath, String fileSG, int version, String outputPath
+  ) {
     try {
-      
       //
       //  First, read the main SG file and create a blank directory for
       //  subsequent output-
@@ -374,7 +386,7 @@ public class File_SG {
       
       String baseFileName = noSuffix(fileSG);
       File_SG mainFile = new File_SG();
-      mainFile.readFile(basePath+fileSG, false);
+      mainFile.readFile(basePath+fileSG, version, false);
       
       File outDir = new File(outputPath);
       if (  outDir.exists()) wipeDirectory(outDir);
@@ -444,13 +456,14 @@ public class File_SG {
   
   
   static void unpackSingleImage(
-    String basePath, String fileSG, String recordID, String outputPath
+    String basePath, String fileSG, int version,
+    String recordID, String outputPath
   ) {
     try {
       say("\nReading main .SG file: "+basePath+fileSG);
       String baseFileName = noSuffix(fileSG);
       File_SG mainFile = new File_SG();
-      mainFile.readFile(basePath+fileSG, false);
+      mainFile.readFile(basePath+fileSG, version, false);
       
       ImageRecord record = mainFile.recordWithLabel(recordID);
       if (record == null) return;
@@ -492,10 +505,12 @@ public class File_SG {
     */
   public static void main(String args[]) {
     File_SG.unpackSingleImage(
-      "C3 Files/", "C3_North.sg2", "Housng1a_46", "housing_46.png"
+      "C3 Files/", "C3_North.sg2", VERSION_C3, "Housng1a_46", "housing_46.png"
     );
     
-    //File_SG.unpackSG("C3 Files/", "C3_North.sg2", "output_sg_north/");
+    //File_SG.unpackSG(
+    //  "C3 Files/", "C3_North.sg2", VERSION_C3, "output_sg_north/"
+    //);
     
     //  Then... if the user wants to modify something, they make a copy of that
     //  folder, tweak the relevant images or attributes, and then recompile the

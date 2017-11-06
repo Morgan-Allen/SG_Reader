@@ -36,6 +36,7 @@ public class File_555 {
       byte rawData[] = new byte[record.dataLength];
       fileAccess.seek(record.offset);
       fileAccess.read(rawData);
+      //File_SG.say("\nBytes read: "+bytesRead+"/"+record.dataLength);
       //
       //  Isometric images are actually stitched together from both a
       //  transparent upper and a diagonally-packed lower half, so they need
@@ -132,14 +133,14 @@ public class File_555 {
     BufferedImage store = r.extracted;
     int wide        = store.getWidth();
     int high        = (wide + 2) / 2;
-    boolean bigTile = (high % BIG_TILE_HIGH) == 0;
+    boolean bigTile = r.file.version == File_SG.VERSION_EM;
     int tileWide    = bigTile ? BIG_TILE_WIDE  : TILE_WIDE ;
     int tileHigh    = bigTile ? BIG_TILE_HIGH  : TILE_HIGH ;
     int tileBytes   = bigTile ? BIG_TILE_BYTES : TILE_BYTES;
     int tilesAcross = high / tileHigh;
     
     if ((wide + 2) * high != r.lengthNoComp) {
-      //  TODO:  Raise the alarm!
+      File_SG.say("Isometric data size did not match: "+r.label);
       return;
     }
 
