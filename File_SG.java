@@ -443,6 +443,35 @@ public class File_SG {
   }
   
   
+  static void unpackSingleImage(
+    String basePath, String fileSG, String recordID, String outputPath
+  ) {
+    try {
+      say("\nReading main .SG file: "+basePath+fileSG);
+      String baseFileName = noSuffix(fileSG);
+      File_SG mainFile = new File_SG();
+      mainFile.readFile(basePath+fileSG, false);
+      
+      ImageRecord record = mainFile.recordWithLabel(recordID);
+      if (record == null) return;
+      
+      RandomAccessFile fileAccess = File_SG.randomInStream(
+        basePath+baseFileName+".555", false
+      );
+      BufferedImage image = File_555.extractImage(record, fileAccess);
+      fileAccess.close();
+      
+      if (image == null) return;
+      File_555.saveImage(image, outputPath);
+      File_555.displayImage(image);
+    }
+    catch(Exception e) {
+      System.out.print("Problem: "+e);
+      e.printStackTrace();
+    }
+  }
+  
+  
   static String noSuffix(String filename) {
     int dotIndex = filename.indexOf(".");
     if (dotIndex == -1) return filename;
@@ -462,7 +491,11 @@ public class File_SG {
   /**  Main execution method-
     */
   public static void main(String args[]) {
-    File_SG.unpackSG("C3 Files/", "C3_North.sg2", "output_sg_north/");
+    File_SG.unpackSingleImage(
+      "C3 Files/", "C3_North.sg2", "Housng1a_46", "housing_46.png"
+    );
+    
+    //File_SG.unpackSG("C3 Files/", "C3_North.sg2", "output_sg_north/");
     
     //  Then... if the user wants to modify something, they make a copy of that
     //  folder, tweak the relevant images or attributes, and then recompile the
