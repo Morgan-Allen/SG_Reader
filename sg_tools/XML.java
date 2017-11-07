@@ -1,3 +1,4 @@
+package sg_tools;
 /**  
   *  Written by Morgan Allen.
   *  I intend to slap on some kind of open-source license here in a while, but

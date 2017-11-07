@@ -1,3 +1,4 @@
+package sg_tools;
 
 
 import java.io.*;
@@ -8,7 +9,7 @@ import javax.imageio.*;
 
 
 
-public class File_555 {
+public class Image_Utils {
   
   
   final static int
@@ -17,26 +18,28 @@ public class File_555 {
   
   
   static BufferedImage extractImage(
-    File_SG.ImageRecord record,
-    RandomAccessFile fileAccess
+    SG_Handler.ImageRecord record, String basePath
   ) {
     //
-    //  TODO:  Allow for loading from alternative 555 files!
-    if (record.externalData) return null;
-    if (record.width == 0 || record.height == 0) return null;
-    
+    //  Basic sanity checks first...
+    if (record.width == 0 || record.height == 0) {
+      return null;
+    }
     try {
+      //
+      //  TODO:  In later versions of this format, there may be extra
+      //  transparency pixels...
+      byte rawData[] = new byte[record.dataLength];
+      RandomAccessFile access = record.file.access;
+      if (access == null) return null;
+      
+      access.seek(record.offset - (record.externalData ? 1 : 0));
+      access.read(rawData);
+      
       BufferedImage image = record.extracted = new BufferedImage(
         record.width, record.height,
         BufferedImage.TYPE_INT_ARGB
       );
-      //
-      //  TODO:  In the case of later versions of this format, there may be
-      //  extra transparency pixels.  Investigate.
-      byte rawData[] = new byte[record.dataLength];
-      fileAccess.seek(record.offset);
-      fileAccess.read(rawData);
-      //File_SG.say("\nBytes read: "+bytesRead+"/"+record.dataLength);
       //
       //  Isometric images are actually stitched together from both a
       //  transparent upper and a diagonally-packed lower half, so they need
@@ -62,14 +65,14 @@ public class File_555 {
   }
   
   
-  static void readIsometricImage(byte rawData[], File_SG.ImageRecord r) {
+  static void readIsometricImage(byte rawData[], SG_Handler.ImageRecord r) {
     readIsometricBase(rawData, r);
     int done = r.lengthNoComp;
     readTransparentImage(rawData, done, r, r.dataLength - done);
   }
   
   
-  static void readSpriteImage(byte rawData[], File_SG.ImageRecord r) {
+  static void readSpriteImage(byte rawData[], SG_Handler.ImageRecord r) {
     readTransparentImage(rawData, 0, r, r.dataLength);
   }
   
@@ -77,18 +80,18 @@ public class File_555 {
   
   /**  Utilities for reading/writing plain images-
     */
-  static void readPlainImage(byte rawData[], File_SG.ImageRecord r) {
+  static void readPlainImage(byte rawData[], SG_Handler.ImageRecord r) {
     processPlainImage(rawData, r, false);
   }
   
   
-  static void writePlainImage(File_SG.ImageRecord r, byte storeData[]) {
+  static void writePlainImage(SG_Handler.ImageRecord r, byte storeData[]) {
     processPlainImage(storeData, r, true);
   }
   
   
   static void processPlainImage(
-    byte rawData[], File_SG.ImageRecord r, boolean write
+    byte rawData[], SG_Handler.ImageRecord r, boolean write
   ) {
     BufferedImage store = r.extracted;
     for (int x, y = 0, i = 0; y < store.getHeight(); y++) {
@@ -110,7 +113,7 @@ public class File_555 {
   /**  Utilities for reading/writing transparency-
     */
   static void readTransparentImage(
-    byte rawData[], int offset, File_SG.ImageRecord r, int length
+    byte rawData[], int offset, SG_Handler.ImageRecord r, int length
   ) {
     BufferedImage store = r.extracted;
     int i = offset;
@@ -144,13 +147,15 @@ public class File_555 {
   
   
   static void writeTransparentImage(
-    File_SG.ImageRecord r, int length, byte storeData[], int offset
+    SG_Handler.ImageRecord r, int length, byte storeData[], int offset
   ) {
     //  TODO:  You'll need a variable-length byte-buffer instead of an array,
     //  if a fresh image of variable size is being encoded.
     
     //  TODO:  You'll also need to omit any pixels accounted for by an
     //  isometric base!
+    
+    //  TODO:  And you need to make sure a run of length > 255 is never stored.
     
     BufferedImage img = r.extracted;
     boolean inGap = false;
@@ -201,29 +206,29 @@ public class File_555 {
     BIG_TILE_BYTES = 3200
   ;
   
-  static void readIsometricBase(byte rawData[], File_SG.ImageRecord r) {
+  static void readIsometricBase(byte rawData[], SG_Handler.ImageRecord r) {
     processIsometricBase(rawData, r, false);
   }
   
-  static void writeIsometricBase(File_SG.ImageRecord r, byte storeData[]) {
+  static void writeIsometricBase(SG_Handler.ImageRecord r, byte storeData[]) {
     processIsometricBase(storeData, r, true);
   }
   
   static void processIsometricBase(
-    byte rawData[], File_SG.ImageRecord r, boolean write
+    byte rawData[], SG_Handler.ImageRecord r, boolean write
   ) {
     
     BufferedImage store = r.extracted;
     int wide      = store.getWidth();
     int high      = (wide + 2) / 2;
-    boolean big   = r.file.version == File_SG.VERSION_EM;
+    boolean big   = r.file.handler.version == SG_Handler.VERSION_EM;
     int tileWide  = big ? BIG_TILE_WIDE  : TILE_WIDE ;
     int tileHigh  = big ? BIG_TILE_HIGH  : TILE_HIGH ;
     int tileBytes = big ? BIG_TILE_BYTES : TILE_BYTES;
     int tileSpan  = high / tileHigh;
     
     if ((wide + 2) * high != r.lengthNoComp) {
-      File_SG.say("Isometric data size did not match: "+r.label);
+      SG_Handler.say("Isometric data size did not match: "+r.label);
       return;
     }
 
@@ -255,7 +260,7 @@ public class File_555 {
   
   
   static void processIsometricTile(
-    byte rawData[], int offset, File_SG.ImageRecord r,
+    byte rawData[], int offset, SG_Handler.ImageRecord r,
     int offX, int offY, int tileWide, int tileHigh, boolean write
   ) {
     BufferedImage store = r.extracted;
@@ -310,9 +315,9 @@ public class File_555 {
   static void ARGBtoBytes(int ARGB, byte storeData[], int offset) {
     
     int stored = 0;
-    stored |= ((ARGB & MASK_R8) >> 6) & MASK_R5;
-    stored |= ((ARGB & MASK_G8) >> 3) & MASK_G5;
-    stored |= ((ARGB & MASK_B8) >> 0) & MASK_B5;
+    stored |= ((ARGB & MASK_R8) >> 9) & MASK_R5;
+    stored |= ((ARGB & MASK_G8) >> 6) & MASK_G5;
+    stored |= ((ARGB & MASK_B8) >> 3) & MASK_B5;
     
     storeData[offset    ] = (byte) ((stored >> 0) & 0xff);
     storeData[offset + 1] = (byte) ((stored >> 8) & 0xff);
@@ -350,7 +355,7 @@ public class File_555 {
       ImageIO.write(image, "png", outputFile);
     }
     catch (Exception e) {
-      File_SG.say("Could not save: "+outPath+", problem: "+e);
+      SG_Handler.say("Could not save: "+outPath+", problem: "+e);
       return;
     }
   }
