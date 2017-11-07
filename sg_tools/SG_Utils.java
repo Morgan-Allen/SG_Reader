@@ -146,7 +146,8 @@ public class SG_Utils {
     try {
       say("\nReading main .SG file: "+basePath+fileSG);
       SG_Handler handler = new SG_Handler(version, false);
-      File_SG file = handler.readFile_SG(basePath+fileSG);
+      handler.basePath = basePath;
+      File_SG file = handler.readFile_SG(fileSG);
       
       ImageRecord record = recordWithLabel(file, recordID);
       if (record == null) return;
@@ -170,6 +171,7 @@ public class SG_Utils {
     */
   public static void main(String args[]) {
     
+    /*
     try {
       SG_Handler handler = new SG_Handler(VERSION_C3, false);
       handler.readAllFiles_SG("Caesar 3/");
@@ -178,10 +180,12 @@ public class SG_Utils {
       System.out.print("Problem: "+e);
       e.printStackTrace();
     }
+    //*/
     
-    /*
+    //*
     unpackSingleImage(
-      "Caesar 3/", "C3_North.sg2", VERSION_C3, "plateau_0", "plateau.png"
+      //"Caesar 3/", "C3_North.sg2", VERSION_C3, "plateau_0", "plateau.png"
+      "Caesar 3/", "C3_North.sg2", VERSION_C3, "Housng1a_42", "housing_42.png"
     );
     //*/
     
