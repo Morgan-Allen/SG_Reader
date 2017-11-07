@@ -1,11 +1,14 @@
+
+
 package sg_tools;
-
-
+import static sg_tools.SG_Handler.*;
 import java.io.*;
 import java.awt.*;
 import java.awt.image.*;
 import javax.swing.*;
 import javax.imageio.*;
+import java.util.ArrayList;
+import java.util.HashSet;
 
 
 
@@ -17,9 +20,111 @@ public class Image_Utils {
   ;
   
   
-  static BufferedImage extractImage(
-    SG_Handler.ImageRecord record, String basePath
+  static boolean replaceImageBytes(
+    int offset, int originalLength, byte newBytes[],
+    File_555 file, String outPath
   ) {
+    try {
+      
+      //
+      //  First, grab any bytes that come before the segment being replaced:
+      byte below[] = new byte[offset];
+      file.access.seek(0);
+      file.access.read(below);
+      
+      //
+      //  Then grab any bytes that come after:
+      int totalBytes = (int) new File(file.fullpath).length();
+      byte above[] = new byte[totalBytes - (offset + originalLength)];
+      file.access.seek(offset + originalLength);
+      file.access.read(above);
+      
+      //
+      //  Then we create a new file that basically sandwiches the new data
+      //  between these two segments.
+      DataOutputStream OS = SG_Utils.outStream(outPath+file.filename, false);
+      OS.write(below);
+      OS.write(newBytes);
+      OS.write(above);
+      OS.close();
+      
+      //
+      //  Having done this, we need to update the image-record in question, and
+      //  any subsequent image-records within the 555 file.
+      int bytesDiff = newBytes.length - originalLength;
+      ArrayList <ImageRecord> changed = new ArrayList();
+      HashSet <File_SG> toUpdate = new HashSet();
+      
+      for (ImageRecord record : file.referring) {
+        if (record.offset == offset) {
+          record.dataLength = newBytes.length;
+          changed.add(record);
+        }
+        if (record.offset > offset) {
+          record.offset += bytesDiff;
+          changed.add(record);
+        }
+      }
+      for (ImageRecord record : changed) {
+        record.flagAsChanged = true;
+        for (Bitmap b : record.belongs) toUpdate.add(b.file);
+      }
+      
+      //
+      //  Then we need to modify the associated entries in any SG2 files.
+      for (File_SG updated : toUpdate) {
+        try {
+          totalBytes = (int) new File(updated.fullpath).length();
+          byte copied[] = new byte[totalBytes];
+          
+          RandomAccessFile in = new RandomAccessFile(updated.fullpath, "r");
+          in.read(copied);
+          in.close();
+          
+          String newPath = outPath+updated.filename;
+          RandomAccessFile out = new RandomAccessFile(newPath, "w");
+          out.write(copied);
+          
+          int recordOffset = 0;
+          recordOffset += SG_HEADER_SIZE;
+          recordOffset += updated.bitmaps.length * SG_BITMAP_SIZE;
+          
+          for (ImageRecord record : updated.records) {
+            if (record.flagAsChanged) {
+              out.seek(recordOffset);
+              file.handler.writeObjectFields(record, out);
+            }
+            recordOffset += SG_RECORD_SIZE;
+          }
+          
+          out.close();
+        }
+        catch (IOException e) {
+          throw e;
+        }
+        catch (Exception e) {
+          say("Problem: "+e);
+          e.printStackTrace();
+        }
+      }
+      
+      //
+      //  Clean up and return:
+      for (ImageRecord record : changed) {
+        record.flagAsChanged = false;
+      }
+      return true;
+    }
+    catch (IOException e) {
+      SG_Handler.say("Problem: "+e);
+      e.printStackTrace();
+    }
+    return false;
+  }
+  
+  
+  
+  static BufferedImage extractImage(ImageRecord record) {
     //
     //  Basic sanity checks first...
     if (record.width == 0 || record.height == 0) {
@@ -60,7 +165,10 @@ public class Image_Utils {
       }
       return image;
     }
-    catch (IOException e) {}
+    catch (IOException e) {
+      SG_Handler.say("Problem: "+e);
+      e.printStackTrace();
+    }
     return null;
   }
   

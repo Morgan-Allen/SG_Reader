@@ -21,7 +21,13 @@ public class SG_Handler {
     VERSION_ZE = 2,
     VERSION_EM = 3
   ;
+  final static int
+    SG_HEADER_SIZE = 80 ,
+    SG_BITMAP_SIZE = 200,
+    SG_RECORD_SIZE = 64
+  ;
   final static File_555 NOT_FOUND = new File_555();
+  
   
   int version;
   boolean verbose;
@@ -50,6 +56,8 @@ public class SG_Handler {
     int remainder[] = new int[11];
     short index[] = new short[300];
     
+    Object BREAK;
+    
     //  Extra fields for subsequent processing:
     SG_Handler handler;
     String filename;
@@ -63,6 +71,8 @@ public class SG_Handler {
   
   
   static class File_555 {
+    
+    Object BREAK;
     
     //  No intrinsic data fields.  Extra fields for subsequent processing:
     SG_Handler handler;
@@ -87,6 +97,8 @@ public class SG_Handler {
     int endIndex;
     
     byte remainder[] = new byte[64];
+    
+    Object BREAK;
     
     //  Extra fields for subsequent processing:
     File_SG file;
@@ -126,12 +138,15 @@ public class SG_Handler {
     byte animSpeedID;
     byte unknown8[] = new byte[5];
     
+    Object BREAK;
+    
     //  Extra fields for subsequent processing:
     File_555 file;
     ArrayList <Bitmap> belongs = new ArrayList();
     BufferedImage extracted;
     String label;
     String lookupKey;
+    boolean flagAsChanged = false;
   }
   
   
@@ -194,14 +209,14 @@ public class SG_Handler {
     file.fullpath = basePath+filename;
     file.IS = SG_Utils.inStream(file.fullpath, false);
     
-    slurpObjectFields(file, file.IS);
+    readObjectFields(file, file.IS);
     printObjectFields(file, "");
     
     //
     //  Once the header is processed, load up the bitmap entries:
     for (int i = 0; i < file.bitmaps.length; i++) {
       Bitmap b = file.bitmaps[i] = new Bitmap();
-      slurpObjectFields(b, file.IS);
+      readObjectFields(b, file.IS);
       
       b.file    = file;
       b.name    = new String(b.nameChars   , "UTF-8");
@@ -220,7 +235,7 @@ public class SG_Handler {
       //
       //  First, load the raw record data...
       ImageRecord r = file.records[i] = new ImageRecord();
-      slurpObjectFields(r, file.IS);
+      readObjectFields(r, file.IS);
       report("\n  Loaded Image Record...");
       printObjectFields(r, "    ");
       
@@ -361,44 +376,67 @@ public class SG_Handler {
   
   /**  Reflection-based utilities for reading/writing object fields:
     */
-  int read(DataInputStream i) throws Exception {
-    return i.read();
-  }
+  //  TODO:  Move these into the Utils class?
   
-  int readInt(DataInputStream i) throws Exception {
+  int readInt(DataInput i) throws Exception {
     return
-      (read(i) & 0xFF) << 0  |
-      (read(i) & 0xFF) << 8  |
-      (read(i) & 0xFF) << 16 |
-      (read(i) & 0xFF) << 24
+      (i.readByte() & 0xFF) << 0  |
+      (i.readByte() & 0xFF) << 8  |
+      (i.readByte() & 0xFF) << 16 |
+      (i.readByte() & 0xFF) << 24
     ;
   }
   
-  short readShort(DataInputStream i) throws Exception {
+  void writeInt(int val, DataOutput o) throws Exception {
+    o.write((val >> 0 ) & 0xff);
+    o.write((val >> 8 ) & 0xff);
+    o.write((val >> 16) & 0xff);
+    o.write((val >> 24) & 0xff);
+  }
+  
+  short readShort(DataInput i) throws Exception {
     return (short) (
-      (read(i) & 0xFF) << 0 |
-      (read(i) & 0xFF) << 8
+      (i.readByte() & 0xFF) << 0 |
+      (i.readByte() & 0xFF) << 8
     );
   }
   
-  byte readChar(DataInputStream i) throws Exception {
-    return (byte) read(i);
+  void writeShort(short val, DataOutput o) throws Exception {
+    o.write((val >> 0 ) & 0xff);
+    o.write((val >> 8 ) & 0xff);
   }
   
-  boolean readBoolean(DataInputStream i) throws Exception {
-    return read(i) != 0;
+  byte readChar(DataInput i) throws Exception {
+    return i.readByte();
   }
   
-  byte[] readBytes(byte bytes[], DataInputStream i) throws Exception {
-    i.read(bytes);
-    return bytes;
+  void writeChar(byte val, DataOutput o) throws Exception {
+    o.write((int) val);
+  }
+  
+  boolean readBoolean(DataInput i) throws Exception {
+    return i.readByte() != 0;
+  }
+  
+  void writeBoolean(boolean val, DataOutput o) throws Exception {
+    o.write(val ? 1 : 0);
+  }
+  
+  void readBytes(byte bytes[], DataInput i) throws Exception {
+    i.readFully(bytes);
+  }
+  
+  void writeBytes(byte bytes[], DataOutput o) throws Exception {
+    o.write(bytes);
   }
   
   
-  void slurpObjectFields(Object o, DataInputStream i) throws Exception {
+  void readObjectFields(Object o, DataInputStream i) throws Exception {
     Field fields[] = o.getClass().getDeclaredFields();
     
     for (Field f : fields) {
+      if (f.getName().equals("BREAK")) continue;
+      
       Class t = f.getType();
       if (t.isArray()) {
         Class  a     = t.getComponentType();
@@ -417,6 +455,34 @@ public class SG_Handler {
       else if (t == Short  .TYPE) f.set(o, readShort  (i));
       else if (t == Byte   .TYPE) f.set(o, readChar   (i));
       else if (t == Boolean.TYPE) f.set(o, readBoolean(i));
+    }
+  }
+  
+  
+  void writeObjectFields(Object o, RandomAccessFile out) throws Exception {
+    Field fields[] = o.getClass().getDeclaredFields();
+    
+    for (Field f : fields) {
+      if (f.getName().equals("BREAK")) continue;
+      
+      Class t = f.getType();
+      if (t.isArray()) {
+        Class  a     = t.getComponentType();
+        Object array = f.get(o);
+        if (array == null) continue;
+        
+        int length = Array.getLength(array);
+        for (int n = 0; n < length; n++) {
+          if (a == Integer.TYPE) writeInt    (Array.getInt    (array, n), out);
+          if (a == Short  .TYPE) writeShort  (Array.getShort  (array, n), out);
+          if (a == Byte   .TYPE) writeChar   (Array.getByte   (array, n), out);
+          if (a == Boolean.TYPE) writeBoolean(Array.getBoolean(array, n), out);
+        }
+      }
+      else if (t == Integer.TYPE) writeInt    (f.getInt    (o), out);
+      else if (t == Short  .TYPE) writeShort  (f.getShort  (o), out);
+      else if (t == Byte   .TYPE) writeChar   (f.getByte   (o), out);
+      else if (t == Boolean.TYPE) writeBoolean(f.getBoolean(o), out);
     }
   }
   

@@ -11,11 +11,11 @@ import java.io.*;
 public class SG_Utils {
   
   
-  /**
+  /**  File IO factory methods-
     */
   static DataInputStream inStream(
     String filename, boolean nullIfError
-  ) throws Exception {
+  ) throws IOException {
     try {
       FileInputStream FS = new FileInputStream(filename);
       BufferedInputStream BS = new BufferedInputStream(FS);
@@ -28,9 +28,24 @@ public class SG_Utils {
   }
   
   
+  static DataOutputStream outStream(
+    String filename, boolean nullIfError
+  ) throws IOException {
+    try {
+      FileOutputStream FS = new FileOutputStream(filename);
+      BufferedOutputStream BS = new BufferedOutputStream(FS);
+      return new DataOutputStream(BS);
+    }
+    catch (IOException e) {
+      if (nullIfError) return null;
+      else throw e;
+    }
+  }
+  
+  
   static FileWriter writerOutStream(
     String filename, boolean nullIfError
-  ) throws Exception {
+  ) throws IOException {
     try {
       return new FileWriter(filename);
     }
@@ -123,7 +138,7 @@ public class SG_Utils {
         MW.close();
         
         for (ImageRecord record : map.records) {
-          BufferedImage image = Image_Utils.extractImage(record, basePath);
+          BufferedImage image = Image_Utils.extractImage(record);
           if (image == null) continue;
           String imgName = record.label+".png";
           Image_Utils.saveImage(image, outputPath+baseMapName+"/"+imgName);
@@ -152,7 +167,7 @@ public class SG_Utils {
       ImageRecord record = recordWithLabel(file, recordID);
       if (record == null) return;
       
-      BufferedImage image = Image_Utils.extractImage(record, basePath);
+      BufferedImage image = Image_Utils.extractImage(record);
       handler.closeAllFileAccess();
       
       if (image == null) return;
@@ -171,7 +186,7 @@ public class SG_Utils {
     */
   public static void main(String args[]) {
     
-    /*
+    //*
     try {
       SG_Handler handler = new SG_Handler(VERSION_C3, false);
       handler.readAllFiles_SG("Caesar 3/");
@@ -182,7 +197,7 @@ public class SG_Utils {
     }
     //*/
     
-    //*
+    /*
     unpackSingleImage(
       //"Caesar 3/", "C3_North.sg2", VERSION_C3, "plateau_0", "plateau.png"
       "Caesar 3/", "C3_North.sg2", VERSION_C3, "Housng1a_42", "housing_42.png"
