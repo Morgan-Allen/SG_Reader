@@ -85,10 +85,7 @@ public class Image_Utils {
           RandomAccessFile out = new RandomAccessFile(newPath, "w");
           out.write(copied);
           
-          int recordOffset = 0;
-          recordOffset += SG_HEADER_SIZE;
-          recordOffset += updated.bitmaps.length * SG_BITMAP_SIZE;
-          
+          int recordOffset = SG_OPENING_SIZE;
           for (ImageRecord record : updated.records) {
             if (record.flagAsChanged) {
               out.seek(recordOffset);
@@ -124,6 +121,16 @@ public class Image_Utils {
   
   
   
+  /**  Utility methods for image extraction:
+    */
+  static class Bytes {
+    byte data[];
+    int used = -1;
+    
+    Bytes(int capacity) { data = new byte[capacity]; }
+  }
+  
+  
   static BufferedImage extractImage(ImageRecord record) {
     //
     //  Basic sanity checks first...
@@ -132,36 +139,37 @@ public class Image_Utils {
     }
     try {
       //
+      //  First, ensure that the record is accessible and allocate space for
+      //  extracting the data:
       //  TODO:  In later versions of this format, there may be extra
-      //  transparency pixels...
-      byte rawData[] = new byte[record.dataLength];
+      //  transparency pixels.  Check this.
       RandomAccessFile access = record.file.access;
       if (access == null) return null;
       
-      access.seek(record.offset - (record.externalData ? 1 : 0));
-      access.read(rawData);
-      
       BufferedImage image = record.extracted = new BufferedImage(
-        record.width, record.height,
-        BufferedImage.TYPE_INT_ARGB
+        record.width, record.height, BufferedImage.TYPE_INT_ARGB
       );
+
+      Bytes bytes = new Bytes(record.dataLength);
+      access.seek(record.offset - (record.externalData ? 1 : 0));
+      access.read(bytes.data);
       //
       //  Isometric images are actually stitched together from both a
       //  transparent upper and a diagonally-packed lower half, so they need
       //  special treatment:
       if (record.imageType == TYPE_ISOMETRIC) {
-        readIsometricImage(rawData, record);
+        readIsometricImage(bytes, record);
       }
       //
       //  Compression is used for any images with transparency, which means any
       //  other walker-sprites in practice:
       else if (record.compressed) {
-        readSpriteImage(rawData, record);
+        readSpriteImage(bytes, record);
       }
       //
       //  And finally, plain images are stored without compression:
       else {
-        readPlainImage(rawData, record);
+        readPlainImage(bytes, record);
       }
       return image;
     }
@@ -173,43 +181,43 @@ public class Image_Utils {
   }
   
   
-  static void readIsometricImage(byte rawData[], SG_Handler.ImageRecord r) {
-    readIsometricBase(rawData, r);
+  static void readIsometricImage(Bytes bytes, SG_Handler.ImageRecord r) {
+    readIsometricBase(bytes, r);
     int done = r.lengthNoComp;
-    readTransparentImage(rawData, done, r, r.dataLength - done);
+    readTransparentImage(bytes, done, r, r.dataLength - done);
   }
   
   
-  static void readSpriteImage(byte rawData[], SG_Handler.ImageRecord r) {
-    readTransparentImage(rawData, 0, r, r.dataLength);
+  static void readSpriteImage(Bytes bytes, SG_Handler.ImageRecord r) {
+    readTransparentImage(bytes, 0, r, r.dataLength);
   }
   
   
   
   /**  Utilities for reading/writing plain images-
     */
-  static void readPlainImage(byte rawData[], SG_Handler.ImageRecord r) {
-    processPlainImage(rawData, r, false);
+  static void readPlainImage(Bytes bytes, SG_Handler.ImageRecord r) {
+    processPlainImage(bytes, r, false);
   }
   
   
-  static void writePlainImage(SG_Handler.ImageRecord r, byte storeData[]) {
-    processPlainImage(storeData, r, true);
+  static void writePlainImage(SG_Handler.ImageRecord r, Bytes store) {
+    processPlainImage(store, r, true);
   }
   
   
   static void processPlainImage(
-    byte rawData[], SG_Handler.ImageRecord r, boolean write
+    Bytes bytes, SG_Handler.ImageRecord r, boolean write
   ) {
     BufferedImage store = r.extracted;
     for (int x, y = 0, i = 0; y < store.getHeight(); y++) {
       for (x = 0; x < store.getWidth(); x++, i += 2) {
         if (write) {
           int ARGB = store.getRGB(x, y);
-          ARGBtoBytes(ARGB, rawData, i);
+          ARGBtoBytes(ARGB, bytes, i);
         }
         else {
-          int ARGB = bytesToARGB(rawData, i);
+          int ARGB = bytesToARGB(bytes, i);
           store.setRGB(x, y, ARGB);
         }
       }
@@ -221,7 +229,7 @@ public class Image_Utils {
   /**  Utilities for reading/writing transparency-
     */
   static void readTransparentImage(
-    byte rawData[], int offset, SG_Handler.ImageRecord r, int length
+    Bytes bytes, int offset, SG_Handler.ImageRecord r, int length
   ) {
     BufferedImage store = r.extracted;
     int i = offset;
@@ -229,10 +237,10 @@ public class Image_Utils {
     int width = store.getWidth();
     
     while (i < offset + length) {
-      int c = rawData[i++] & 0xff;
+      int c = bytes.data[i++] & 0xff;
       if (c == 255) {
         //  The next byte is the number of pixels to skip
-        x += rawData[i++] & 0xff;
+        x += bytes.data[i++] & 0xff;
         while (x >= width) {
           x -= width;
           y++;
@@ -241,7 +249,7 @@ public class Image_Utils {
       else {
         //  `c' is the number of image data bytes
         for (j = 0; j < c; j++, i += 2) {
-          int ARGB = bytesToARGB(rawData, i);
+          int ARGB = bytesToARGB(bytes, i);
           store.setRGB(x, y, ARGB);
           x++;
           while (x >= width) {
@@ -255,7 +263,7 @@ public class Image_Utils {
   
   
   static void writeTransparentImage(
-    SG_Handler.ImageRecord r, int length, byte storeData[], int offset
+    SG_Handler.ImageRecord r, int length, Bytes store, int offset
   ) {
     //  TODO:  You'll need a variable-length byte-buffer instead of an array,
     //  if a fresh image of variable size is being encoded.
@@ -278,7 +286,7 @@ public class Image_Utils {
         if ((pix & 0xff000000) == 0) {
           if (! inGap) {
             if (fillStartIndex >= 0) {
-              storeData[fillStartIndex] = (byte) gapSize;
+              store.data[fillStartIndex] = (byte) gapSize;
             }
             gapSize = 0;
             inGap = true;
@@ -288,12 +296,12 @@ public class Image_Utils {
         else {
           if (inGap) {
             inGap = false;
-            storeData[index++] = (byte) 0xff;
-            storeData[index++] = (byte) gapSize;
+            store.data[index++] = (byte) 0xff;
+            store.data[index++] = (byte) gapSize;
             fillStartIndex = index++;
             gapSize = 0;
           }
-          ARGBtoBytes(pix, storeData, index);
+          ARGBtoBytes(pix, store, index);
           index += 2;
           gapSize += 1;
         }
@@ -314,16 +322,16 @@ public class Image_Utils {
     BIG_TILE_BYTES = 3200
   ;
   
-  static void readIsometricBase(byte rawData[], SG_Handler.ImageRecord r) {
-    processIsometricBase(rawData, r, false);
+  static void readIsometricBase(Bytes bytes, SG_Handler.ImageRecord r) {
+    processIsometricBase(bytes, r, false);
   }
   
-  static void writeIsometricBase(SG_Handler.ImageRecord r, byte storeData[]) {
-    processIsometricBase(storeData, r, true);
+  static void writeIsometricBase(SG_Handler.ImageRecord r, Bytes store) {
+    processIsometricBase(store, r, true);
   }
   
   static void processIsometricBase(
-    byte rawData[], SG_Handler.ImageRecord r, boolean write
+    Bytes bytes, SG_Handler.ImageRecord r, boolean write
   ) {
     
     BufferedImage store = r.extracted;
@@ -354,7 +362,7 @@ public class Image_Utils {
       
       for (int x = 0; x < maxX; x++) {
         processIsometricTile(
-          rawData, index * tileBytes, r,
+          bytes, index * tileBytes, r,
           offsetX, offsetY,
           tileWide, tileHigh,
           write
@@ -368,7 +376,7 @@ public class Image_Utils {
   
   
   static void processIsometricTile(
-    byte rawData[], int offset, SG_Handler.ImageRecord r,
+    Bytes bytes, int offset, SG_Handler.ImageRecord r,
     int offX, int offY, int tileWide, int tileHigh, boolean write
   ) {
     BufferedImage store = r.extracted;
@@ -380,10 +388,10 @@ public class Image_Utils {
       for (int x = startX; x < tileWide - startX; x++, i += 2) {
         if (write) {
           int ARGB = store.getRGB(offX + x, offY + y);
-          ARGBtoBytes(ARGB, rawData, offset + i);
+          ARGBtoBytes(ARGB, bytes, offset + i);
         }
         else {
-          int ARGB = bytesToARGB(rawData, offset + i);
+          int ARGB = bytesToARGB(bytes, offset + i);
           store.setRGB(offX + x, offY + y, ARGB);
         }
       }
@@ -406,29 +414,31 @@ public class Image_Utils {
   ;
   
   
-  static int bytesToARGB(byte rawData[], int offset) {
-    if (offset + 1 >= rawData.length) return 0;
+  static int bytesToARGB(Bytes bytes, int offset) {
+    if (offset + 1 >= bytes.data.length) return 0;
     
-    int color = (rawData[offset] & 0xff) | ((rawData[offset + 1] & 0xff) << 8);
+    byte raw[] = bytes.data;
+    int color = (raw[offset] & 0xff) | ((raw[offset + 1] & 0xff) << 8);
     int RGBA  = 0xff000000;
-    
-    RGBA |= (color & MASK_R5) << (6 + 3);
-    RGBA |= (color & MASK_G5) << (3 + 3);
-    RGBA |= (color & MASK_B5) << (0 + 3);
+    RGBA |= (color & MASK_R5) << 9;
+    RGBA |= (color & MASK_G5) << 6;
+    RGBA |= (color & MASK_B5) << 3;
     
     return RGBA;
   }
   
   
-  static void ARGBtoBytes(int ARGB, byte storeData[], int offset) {
+  static void ARGBtoBytes(int ARGB, Bytes store, int offset) {
+    if (offset + 1 >= store.data.length) return;
     
     int stored = 0;
     stored |= ((ARGB & MASK_R8) >> 9) & MASK_R5;
     stored |= ((ARGB & MASK_G8) >> 6) & MASK_G5;
     stored |= ((ARGB & MASK_B8) >> 3) & MASK_B5;
     
-    storeData[offset    ] = (byte) ((stored >> 0) & 0xff);
-    storeData[offset + 1] = (byte) ((stored >> 8) & 0xff);
+    store.data[offset    ] = (byte) ((stored >> 0) & 0xff);
+    store.data[offset + 1] = (byte) ((stored >> 8) & 0xff);
+    store.used = offset + 2;
   }
   
   

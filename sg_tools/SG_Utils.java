@@ -186,7 +186,7 @@ public class SG_Utils {
     */
   public static void main(String args[]) {
     
-    //*
+    /*
     try {
       SG_Handler handler = new SG_Handler(VERSION_C3, false);
       handler.readAllFiles_SG("Caesar 3/");
@@ -197,7 +197,7 @@ public class SG_Utils {
     }
     //*/
     
-    /*
+    //*
     unpackSingleImage(
       //"Caesar 3/", "C3_North.sg2", VERSION_C3, "plateau_0", "plateau.png"
       "Caesar 3/", "C3_North.sg2", VERSION_C3, "Housng1a_42", "housing_42.png"

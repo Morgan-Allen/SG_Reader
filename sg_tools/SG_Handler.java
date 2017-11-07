@@ -24,7 +24,12 @@ public class SG_Handler {
   final static int
     SG_HEADER_SIZE = 80 ,
     SG_BITMAP_SIZE = 200,
-    SG_RECORD_SIZE = 64
+    SG_RECORD_SIZE = 64 ,
+    SG_INDEX_SIZE  = 600,
+    SG_OPENING_SIZE = (
+      SG_HEADER_SIZE + SG_INDEX_SIZE +
+      (SG_BITMAP_SIZE * 100)
+    )
   ;
   final static File_555 NOT_FOUND = new File_555();
   
@@ -435,7 +440,7 @@ public class SG_Handler {
     Field fields[] = o.getClass().getDeclaredFields();
     
     for (Field f : fields) {
-      if (f.getName().equals("BREAK")) continue;
+      if (f.getName().equals("BREAK")) break;
       
       Class t = f.getType();
       if (t.isArray()) {
@@ -463,7 +468,7 @@ public class SG_Handler {
     Field fields[] = o.getClass().getDeclaredFields();
     
     for (Field f : fields) {
-      if (f.getName().equals("BREAK")) continue;
+      if (f.getName().equals("BREAK")) break;
       
       Class t = f.getType();
       if (t.isArray()) {
