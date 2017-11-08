@@ -90,6 +90,10 @@ public class Image_Utils {
     File_555 file, String outPath
   ) {
     try {
+      //
+      //  Create the output directory if it isn't there already:
+      File outDir = new File(outPath);
+      if (! outDir.exists()) outDir.mkdirs();
       
       //
       //  First, grab any bytes that come before the segment being replaced:
@@ -147,7 +151,7 @@ public class Image_Utils {
           in.close();
           
           String newPath = outPath+updated.filename;
-          RandomAccessFile out = new RandomAccessFile(newPath, "w");
+          RandomAccessFile out = new RandomAccessFile(newPath, "rw");
           out.write(copied);
           
           int recordOffset = SG_OPENING_SIZE;

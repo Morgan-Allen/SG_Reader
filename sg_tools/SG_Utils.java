@@ -6,6 +6,7 @@ import static sg_tools.Image_Utils.*;
 import java.awt.*;
 import java.awt.image.*;
 import java.io.*;
+import javax.imageio.ImageIO;
 
 
 
@@ -156,9 +157,8 @@ public class SG_Utils {
   }
   
   
-  static void unpackSingleImage(
-    String basePath, String fileSG, int version,
-    String recordID, String outputPath
+  static BufferedImage unpackSingleImage(
+    String basePath, String fileSG, int version, String recordID
   ) {
     try {
       say("\nReading main .SG file: "+basePath+fileSG);
@@ -167,14 +167,48 @@ public class SG_Utils {
       File_SG file = handler.readFile_SG(fileSG);
       
       ImageRecord record = recordWithLabel(file, recordID);
+      if (record == null) return null;
+      
+      BufferedImage image = extractImage(record);
+      handler.closeAllFileAccess();
+      if (image == null) return null;
+      
+      return image;
+    }
+    catch(Exception e) {
+      System.out.print("Problem: "+e);
+      e.printStackTrace();
+      return null;
+    }
+  }
+  
+  
+  static void replaceSingleImage(
+    String basePath, String fileSG, int version,
+    String recordID, String newImagePath, String outputDir
+  ) {
+    try {
+      say("\nReplacing image record: "+recordID+" in "+basePath+fileSG);
+      
+      SG_Handler handler = new SG_Handler(version, false);
+      handler.basePath = basePath;
+      File_SG file = handler.readFile_SG(fileSG);
+      
+      ImageRecord record = recordWithLabel(file, recordID);
       if (record == null) return;
       
-      BufferedImage image = Image_Utils.extractImage(record);
-      handler.closeAllFileAccess();
-      
+      //  TODO:  Automate this bit.
+      int offset = record.offset, length = record.dataLength;
+      if (record.externalData) offset -= 1;
+      BufferedImage image = ImageIO.read(new File(newImagePath));
       if (image == null) return;
-      Image_Utils.saveImage(image, outputPath);
-      Image_Utils.displayImage(image);
+      
+      Bytes asBytes = Image_Utils.bytesFromImage(
+        record, image
+      );
+      Image_Utils.replaceImageBytes(
+        offset, length, asBytes.data, record.file, outputDir
+      );
     }
     catch(Exception e) {
       System.out.print("Problem: "+e);
@@ -186,7 +220,10 @@ public class SG_Utils {
   
   /**  Main execution method-
     */
-  static void testImagePacking(String... testImageIDs) {
+  static void testImagePacking(
+    String basePath, String fileSG, int version,
+    String... testImageIDs
+  ) {
     
     try {
       //
@@ -231,9 +268,9 @@ public class SG_Utils {
       if (! dirFile.exists()) dirFile.mkdirs();
       
       say("\nTesting image un/packing...");
-      SG_Handler handler = new SG_Handler(VERSION_C3, false);
-      handler.basePath = "Caesar 3/";
-      File_SG file = handler.readFile_SG("C3_North.sg2");
+      SG_Handler handler = new SG_Handler(version, false);
+      handler.basePath = basePath;
+      File_SG file = handler.readFile_SG(fileSG);
       
       for (String ID : testImageIDs) {
         
@@ -344,7 +381,69 @@ public class SG_Utils {
   }
   
   
+  static void testImageSubstitution(
+    String basePath, String fileSG, int version,
+    String recordID, String savePath, String outputDir,
+    String... testFilenames
+  ) {
+    say("\nTesting file-record substitution...");
+    
+    BufferedImage extract = unpackSingleImage(
+      basePath, fileSG, version,
+      recordID
+    );
+    saveImage(extract, savePath);
+    replaceSingleImage(
+      basePath, fileSG, version,
+      recordID, savePath, outputDir
+    );
+    
+    //  Now verify that the SG files in question are identical-
+    for (String filename : testFilenames) {
+      boolean same = testFilesSame(basePath, outputDir, filename);
+      if (same) {
+        say("  "+filename+" identical in output directory.");
+      }
+      else {
+        say("  "+filename+" is not identical.");
+      }
+    }
+  }
+  
+  
+  static boolean testFilesSame(
+    String basePath, String outputDir, String filename
+  ) {
+    try {
+      File original = new File(basePath +filename);
+      File rewrite  = new File(outputDir+filename);
+      
+      Bytes bytesO = new Bytes((int) original.length());
+      Bytes bytesR = new Bytes((int) rewrite .length());
+      
+      DataInputStream inO = inStream(basePath +filename, false);
+      DataInputStream inR = inStream(outputDir+filename, false);
+      
+      bytesO.used = inO.read(bytesO.data);
+      bytesR.used = inR.read(bytesR.data);
+      
+      inO.close();
+      inR.close();
+      
+      return checkPackingSame(bytesO, bytesR);
+    }
+    catch (Exception e) {
+      return false;
+    }
+  }
+  
+  
+  
+  /**  Basic test-suite...
+    */
   public static void main(String args[]) {
+    
+    /*
     final String testImageIDs[] = {
       "empire_panels_3",
       "Carts_692",
@@ -354,7 +453,33 @@ public class SG_Utils {
       "Housng1a_47",
     };
     //Image_Utils.packVerbose = true;
-    testImagePacking(testImageIDs);
+    testImagePacking("Caesar 3/", "C3.sg2", VERSION_C3, testImageIDs);
+    //*/
+    
+    try {
+      
+    }
+    catch(Exception e) {
+      System.out.print("Problem: "+e);
+      e.printStackTrace();
+    }
+    
+    
+    /*
+    testImageSubstitution(
+      "Caesar 3/", "C3.sg2", VERSION_C3,
+      "Housng1a_42", "output_c3/temp_house_42.png", "output_c3/",
+      "C3.sg2",
+      "C3.555"
+    );
+    //*/
+    
+    /*
+    replaceSingleImage(
+      "Caesar 3/", "C3.sg2", VERSION_C3,
+      "Govt_9", "custom_images/custom_forum.png", "output_c3/"
+    );
+    //*/
     
     /*
     try {
