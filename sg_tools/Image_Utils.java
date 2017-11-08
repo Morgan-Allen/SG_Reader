@@ -15,10 +15,74 @@ import java.util.HashSet;
 public class Image_Utils {
   
   
+  /**  Some initial constants and utility containers:
+    */
   final static int
     TYPE_ISOMETRIC = 30
   ;
   static boolean packVerbose = false;
+  
+  
+  static class Bytes {
+    byte data[];
+    int used = -1;
+    
+    Bytes(int capacity) { data = new byte[capacity]; }
+  }
+  
+  
+  
+  /**  Handling storage of new images within .555 files:
+    */
+  static Bytes bytesFromImage(ImageRecord record, BufferedImage image) {
+    //
+    //  If it hasn't been set already, store the image now:
+    record.extracted = image;
+    //
+    //  We allocate a buffer with some (hopefully) excess capacity for storing
+    //  the compressed image-
+    int capacity = record.width * record.height * 4;
+    Bytes store = new Bytes(capacity);
+    //
+    //  Isometric images are actually stitched together from both a
+    //  transparent upper and a diagonally-packed lower half, so they need
+    //  special treatment:
+    if (record.imageType == TYPE_ISOMETRIC) {
+      //
+      //  We create a copy of the image, since we will need to wipe certain
+      //  pixels as we go before creating transparency:
+      ColorModel     cm      = record.extracted.getColorModel();
+      boolean        alphaPM = cm.isAlphaPremultiplied();
+      WritableRaster raster  = record.extracted.copyData(null);
+      record.extracted = new BufferedImage(cm, raster, alphaPM, null);
+      
+      isometricBasePass(store, record, true, true);
+      int done = store.used;
+      writeTransparentImage(record, record.dataLength - done, store, done);
+      
+      //  TODO:  You'll need to create a new ImageRecord here, potentially with
+      //  new values for dataLength and lengthNoComp.
+      record.lengthNoComp = done;
+      record.dataLength   = store.used;
+    }
+    //
+    //  Compression is used for any images with transparency, which means any
+    //  other walker-sprites in practice:
+    else if (record.compressed) {
+      writeTransparentImage(record, record.dataLength, store, 0);
+    }
+    //
+    //  And finally, plain images are stored without compression:
+    else {
+      plainImagePass(store, record, true);
+    }
+    //
+    //  Finally, we trim the buffer down to size and return-
+    byte clipped[] = new byte[store.used];
+    System.arraycopy(store.data, 0, clipped, 0, store.used);
+    store.data = clipped;
+    return store;
+  }
   
   
   static boolean replaceImageBytes(
@@ -124,14 +188,6 @@ public class Image_Utils {
   
   /**  Utility methods for image extraction:
     */
-  static class Bytes {
-    byte data[];
-    int used = -1;
-    
-    Bytes(int capacity) { data = new byte[capacity]; }
-  }
-  
-  
   static Bytes extractRawBytes(
     ImageRecord record
   ) throws IOException {
@@ -164,18 +220,20 @@ public class Image_Utils {
     //  transparent upper and a diagonally-packed lower half, so they need
     //  special treatment:
     if (record.imageType == TYPE_ISOMETRIC) {
-      readIsometricImage(bytes, record);
+      isometricBasePass(bytes, record, false, false);
+      int done = record.lengthNoComp;
+      readTransparentImage(bytes, done, record, record.dataLength - done);
     }
     //
     //  Compression is used for any images with transparency, which means any
     //  other walker-sprites in practice:
     else if (record.compressed) {
-      readSpriteImage(bytes, record);
+      readTransparentImage(bytes, 0, record, record.dataLength);
     }
     //
     //  And finally, plain images are stored without compression:
     else {
-      readPlainImage(bytes, record);
+      plainImagePass(bytes, record, false);
     }
     return image;
   }
@@ -199,90 +257,9 @@ public class Image_Utils {
   }
   
   
-  static Bytes bytesFromImage(ImageRecord record, BufferedImage image) {
-    //
-    //  If it hasn't been set already, store the image now:
-    record.extracted = image;
-    //
-    //  We allocate a buffer with some (hopefully) excess capacity for storing
-    //  the compressed image-
-    int capacity = record.width * record.height * 4;
-    Bytes store = new Bytes(capacity);
-    //
-    //  Isometric images are actually stitched together from both a
-    //  transparent upper and a diagonally-packed lower half, so they need
-    //  special treatment:
-    if (record.imageType == TYPE_ISOMETRIC) {
-      writeIsometricImage(record, store);
-    }
-    //
-    //  Compression is used for any images with transparency, which means any
-    //  other walker-sprites in practice:
-    else if (record.compressed) {
-      writeSpriteImage(record, store);
-    }
-    //
-    //  And finally, plain images are stored without compression:
-    else {
-      writePlainImage(record, store);
-    }
-    //
-    //  Finally, we trim the buffer down to size and return-
-    byte clipped[] = new byte[store.used];
-    System.arraycopy(store.data, 0, clipped, 0, store.used);
-    store.data = clipped;
-    return store;
-  }
-  
-  
-  static void readIsometricImage(Bytes bytes, ImageRecord r) {
-    readIsometricBase(bytes, r);
-    int done = r.lengthNoComp;
-    readTransparentImage(bytes, done, r, r.dataLength - done);
-  }
-  
-  
-  static void writeIsometricImage(ImageRecord r, Bytes store) {
-    //
-    //  We create a copy of the image, since we will need to wipe certain
-    //  pixels as we go before creating transparency:
-    ColorModel     cm      = r.extracted.getColorModel();
-    boolean        alphaPM = cm.isAlphaPremultiplied();
-    WritableRaster raster  = r.extracted.copyData(null);
-    r.extracted = new BufferedImage(cm, raster, alphaPM, null);
-    
-    writeIsometricBase(r, store, true);
-    int done = store.used;
-    writeTransparentImage(r, r.dataLength - done, store, done);
-    
-    //  TODO:  You'll need to create a new ImageRecord here, potentially with
-    //  new values for dataLength and lengthNoComp.
-  }
-  
-  
-  static void readSpriteImage(Bytes bytes, ImageRecord r) {
-    readTransparentImage(bytes, 0, r, r.dataLength);
-  }
-  
-  
-  static void writeSpriteImage(ImageRecord r, Bytes store) {
-    writeTransparentImage(r, r.dataLength, store, 0);
-  }
-  
-  
   
   /**  Utilities for reading/writing plain images-
     */
-  static void readPlainImage(Bytes bytes, ImageRecord r) {
-    plainImagePass(bytes, r, false);
-  }
-  
-  
-  static void writePlainImage(ImageRecord r, Bytes store) {
-    plainImagePass(store, r, true);
-  }
-  
-  
   static void plainImagePass(
     Bytes bytes, ImageRecord r, boolean write
   ) {
@@ -425,13 +402,6 @@ public class Image_Utils {
     BIG_TILE_BYTES = 3200
   ;
   
-  static void readIsometricBase(Bytes bytes, ImageRecord r) {
-    isometricBasePass(bytes, r, false, false);
-  }
-  
-  static void writeIsometricBase(ImageRecord r, Bytes store, boolean wipe) {
-    isometricBasePass(store, r, true, wipe);
-  }
   
   static void isometricBasePass(
     Bytes bytes, ImageRecord r, boolean write, boolean wipe
