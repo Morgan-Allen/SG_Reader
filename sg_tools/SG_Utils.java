@@ -3,6 +3,7 @@
 package sg_tools;
 import static sg_tools.SG_Handler.*;
 import static sg_tools.Image_Utils.*;
+import java.awt.*;
 import java.awt.image.*;
 import java.io.*;
 
@@ -185,16 +186,50 @@ public class SG_Utils {
   
   /**  Main execution method-
     */
-  static void testImagePacking() {
-    
-    final String testImageIDs[] = {
-      "empire_panels_3",
-      "Carts_692",
-      "Housng1a_42",
-    };
-    int dispX = 200;
+  static void testImagePacking(String... testImageIDs) {
     
     try {
+      //
+      //  Have to test basic byte un/packing first (note that the 16th bit of
+      //  the short for a pixel is always filled....)
+      Bytes testIn  = new Bytes(4);
+      Bytes testOut = new Bytes(4);
+      for (int i = 4; i-- > 0;) testIn.data[i] = (byte) (Math.random() * 256);
+      testIn.data[1] |= 1 << 7;
+      testIn.data[3] |= 1 << 7;
+      testIn.used = testOut.used = 4;
+      int pixels[] = {
+        bytesToARGB(testIn, 0),
+        bytesToARGB(testIn, 2)
+      };
+      ARGBtoBytes(pixels[0], testOut, 0);
+      ARGBtoBytes(pixels[1], testOut, 2);
+      
+      say("\nTesting byte-level conversions...");
+      String inB = "  In: ", outB = "  Out:";
+      for (int i = 0; i < 32; i++) {
+        if (i % 8 == 0) { inB += " "; outB += " "; }
+        inB  += bitAt(i % 8, testIn .data[i / 8] & 0xff);
+        outB += bitAt(i % 8, testOut.data[i / 8] & 0xff);
+      }
+      say(inB );
+      say(outB);
+      
+      boolean basicOK = checkPackingSame(testIn, testOut);
+      if (basicOK) {
+        say("  Bytes packed correctly.");
+      }
+      else {
+        say("  Bytes not packed correctly!");
+      }
+      
+      //
+      //  Then, we test the full range of test images supplied:
+      int dispX = 200;
+      String outDir = "output_test/";
+      File dirFile = new File(outDir);
+      if (! dirFile.exists()) dirFile.mkdirs();
+      
       say("\nTesting image un/packing...");
       SG_Handler handler = new SG_Handler(VERSION_C3, false);
       handler.basePath = "Caesar 3/";
@@ -204,22 +239,37 @@ public class SG_Utils {
         
         ImageRecord record = recordWithLabel(file, ID);
         if (record == null) continue;
+        say("\n  File: "+ID+"  Size: "+record.width+" x "+record.height);
         
         Bytes bytesIn = extractRawBytes(record);
-        BufferedImage image = imageFromBytes(bytesIn, record);
-        if (image == null) return;
+        BufferedImage loaded = imageFromBytes(bytesIn, record);
+        if (loaded == null) return;
         
-        Bytes bytesOut = bytesFromImage(record, image);
-        boolean result = checkPackResult(bytesIn, bytesOut);
-        if (result) {
-          System.out.println("Packed correctly- "+ID);
+        Bytes bytesOut = bytesFromImage(record, loaded);
+        saveImage(loaded, outDir+ID+"_loaded.png");
+        displayImage(loaded, dispX, 50);
+        
+        BufferedImage packed = imageFromBytes(bytesOut, record);
+        saveImage(packed, outDir+ID+"_packed.png");
+        displayImage(packed, dispX, 200);
+        
+        dispX += 100;
+        
+        boolean imgSame = checkImagesSame(loaded, packed);
+        if (imgSame) {
+          say("  Displayed images are identical.");
         }
         else {
-          System.out.println("Did not pack correctly! "+ID);
+          say("  Displayed images do not match.");
         }
         
-        Image_Utils.saveImage(image, ID+".png");
-        Image_Utils.displayImage(image, dispX += 100, 50);
+        boolean packSame = checkPackingSame(bytesIn, bytesOut);
+        if (packSame) {
+          say("  Bytes packed identically.");
+        }
+        else {
+          say("  Did not pack bytes identically.");
+        }
       }
       
       handler.closeAllFileAccess();
@@ -231,25 +281,75 @@ public class SG_Utils {
   }
   
   
-  static boolean checkPackResult(Bytes in, Bytes out) {
-    if (in.used != out.used) {
-      System.out.println("Different lengths: "+in.used+" vs. "+out.used);
-      return false;
+  static int bitAt(int index, int number) {
+    return ((number & (1 << index)) == 0) ? 0 : 1;
+  }
+  
+  
+  static boolean checkImagesSame(BufferedImage in, BufferedImage out) {
+    boolean allOK = true;
+    
+    if (in.getWidth() != out.getWidth()) {
+      say("Different width: "+in.getWidth()+" -> "+out.getWidth());
+      allOK = false;
     }
-    for (int i = in.used; i-- > 0;) {
+    if (in.getHeight() != out.getHeight()) {
+      say("Different height: "+in.getHeight()+" -> "+out.getHeight());
+      allOK = false;
+    }
+    int maxWide = Math.min(in.getWidth (), out.getWidth ());
+    int maxHigh = Math.min(in.getHeight(), out.getHeight());
+    
+    pixLoop: for (int y = 0; y < maxHigh; y++) {
+      for (int x = 0; x < maxWide; x++) {
+        int VI = in .getRGB(x, y);
+        int VO = out.getRGB(x, y);
+        if (VI != VO) {
+          Color inC  = new Color(VI);
+          Color outC = new Color(VO);
+          say("  Differ at point: "+x+"|"+y+", "+inC+" -> "+outC);
+          allOK = false;
+          break pixLoop;
+        }
+      }
+    }
+    return allOK;
+  }
+  
+  
+  static boolean checkPackingSame(Bytes in, Bytes out) {
+    boolean allOK = true;
+    
+    if (in.used != out.used) {
+      say("  Different lengths: "+in.used+" -> "+out.used);
+      allOK = false;
+    }
+    
+    int maxIndex = Math.min(in.used, out.used);
+    for (int i = 0; i <  maxIndex; i++) {
       int VI = in .data[i] & 0xff;
       int VO = out.data[i] & 0xff;
       if (VI != VO) {
-        System.out.println("Differ at index: "+i+", "+VI+" vs. "+VO);
-        return false;
+        say("  Differ at index: "+i+", "+VI+" -> "+VO);
+        allOK = false;
+        break;
       }
     }
-    return true;
+    return allOK;
   }
   
   
   public static void main(String args[]) {
-    testImagePacking();
+    final String testImageIDs[] = {
+      "empire_panels_3",
+      "Carts_692",
+      "Govt_0",
+      "Govt_9",
+      "Housng1a_42",
+      "Housng1a_47",
+    };
+    //Image_Utils.packVerbose = true;
+    testImagePacking(testImageIDs);
     
     /*
     try {

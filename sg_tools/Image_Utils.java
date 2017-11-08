@@ -18,6 +18,7 @@ public class Image_Utils {
   final static int
     TYPE_ISOMETRIC = 30
   ;
+  static boolean packVerbose = false;
   
   
   static boolean replaceImageBytes(
@@ -200,6 +201,9 @@ public class Image_Utils {
   
   static Bytes bytesFromImage(ImageRecord record, BufferedImage image) {
     //
+    //  If it hasn't been set already, store the image now:
+    record.extracted = image;
+    //
     //  We allocate a buffer with some (hopefully) excess capacity for storing
     //  the compressed image-
     int capacity = record.width * record.height * 4;
@@ -239,14 +243,18 @@ public class Image_Utils {
   
   
   static void writeIsometricImage(ImageRecord r, Bytes store) {
-    writeIsometricBase(r, store);
-    //  TODO:  Writing the isometric base will have to wipe the pixels touched
-    //  from the image-buffer, so they can be handled as transparent afterward.
+    //
+    //  We create a copy of the image, since we will need to wipe certain
+    //  pixels as we go before creating transparency:
+    ColorModel     cm      = r.extracted.getColorModel();
+    boolean        alphaPM = cm.isAlphaPremultiplied();
+    WritableRaster raster  = r.extracted.copyData(null);
+    r.extracted = new BufferedImage(cm, raster, alphaPM, null);
     
-    //  Okay.  Get a test-suite in place first.
-    
+    writeIsometricBase(r, store, true);
     int done = store.used;
-    writeTransparentImage(r, r.dataLength, store, done);
+    writeTransparentImage(r, r.dataLength - done, store, done);
+    
     //  TODO:  You'll need to create a new ImageRecord here, potentially with
     //  new values for dataLength and lengthNoComp.
   }
@@ -266,16 +274,16 @@ public class Image_Utils {
   /**  Utilities for reading/writing plain images-
     */
   static void readPlainImage(Bytes bytes, ImageRecord r) {
-    processPlainImage(bytes, r, false);
+    plainImagePass(bytes, r, false);
   }
   
   
   static void writePlainImage(ImageRecord r, Bytes store) {
-    processPlainImage(store, r, true);
+    plainImagePass(store, r, true);
   }
   
   
-  static void processPlainImage(
+  static void plainImagePass(
     Bytes bytes, ImageRecord r, boolean write
   ) {
     BufferedImage store = r.extracted;
@@ -300,16 +308,25 @@ public class Image_Utils {
   static void readTransparentImage(
     Bytes bytes, int offset, ImageRecord r, int length
   ) {
+    boolean report = packVerbose;
+    if (report) say("\nReading transparent image pixels...");
+    
     BufferedImage store = r.extracted;
+    int maxRead = offset + length;
+    if (maxRead > bytes.used) maxRead = bytes.used;
+    
     int i = offset;
     int x = 0, y = 0, j;
     int width = store.getWidth();
     
-    while (i < offset + length) {
+    while (i < maxRead) {
       int c = bytes.data[i++] & 0xff;
       if (c == 255) {
         //  The next byte is the number of pixels to skip
-        x += bytes.data[i++] & 0xff;
+        int skip = bytes.data[i++] & 0xff;
+        if (report) say("    Gap  x"+skip+", index: "+(i - 2));
+        
+        x += skip;
         while (x >= width) {
           x -= width;
           y++;
@@ -317,8 +334,11 @@ public class Image_Utils {
       }
       else {
         //  `c' is the number of image data bytes
-        for (j = 0; j < c; j++, i += 2) {
+        if (report) say("    Fill x"+c+", index: "+(i - 1));
+        
+        for (j = 0; j < c && i < maxRead; j++, i += 2) {
           int ARGB = bytesToARGB(bytes, i);
+          
           store.setRGB(x, y, ARGB);
           x++;
           while (x >= width) {
@@ -334,46 +354,85 @@ public class Image_Utils {
   static void writeTransparentImage(
     ImageRecord r, int length, Bytes store, int offset
   ) {
-    //  TODO:  You'll need a variable-length byte-buffer instead of an array,
-    //  if a fresh image of variable size is being encoded.
-    
-    //  TODO:  You'll also need to omit any pixels accounted for by an
-    //  isometric base!
-    
-    //  TODO:  And you need to make sure a run of length > 255 is never stored.
+    boolean report = packVerbose;
+    if (report) say("\nWriting transparent image bytes...");
     
     BufferedImage img = r.extracted;
-    boolean inGap = false;
-    int index          =  0;
-    int gapSize        =  0;
-    int fillStartIndex = -1;
+    int high = img.getHeight(), wide = img.getWidth();
+    int maxX = wide - 1, maxIndex = offset + length;
     
-    for (int x = 0; x < img.getWidth(); x++) {
-      for (int y = 0; y < img.getHeight(); y++) {
+    final int MAX_GAP = 255, MAX_FILL = 16;
+    int index     =  offset;
+    int inGap     = -1;
+    int runSize   = -1;
+    int fillStart = -1;
+    
+    //  TODO:  There's probably a more elegant way to handle this logic.
+    //         Look into it.
+    
+    for (int y = 0; y < high; y++) {
+      for (int x = 0; x < wide; x++) {
         int pix = img.getRGB(x, y);
+        boolean empty = (pix & 0xff000000) == 0;
         
-        if ((pix & 0xff000000) == 0) {
-          if (! inGap) {
-            if (fillStartIndex >= 0) {
-              store.data[fillStartIndex] = (byte) gapSize;
+        if (empty) {
+          if (inGap != 1) {
+            if (fillStart >= 0 && runSize > 0) {
+              store.data[fillStart] = (byte) runSize;
+              if (report) {
+                say("\n    Pixel-fill ended with size "+runSize+"/"+MAX_FILL);
+                say("      Indexes: "+fillStart+" -> "+index);
+                say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high);
+              }
             }
-            gapSize = 0;
-            inGap = true;
+            else if (fillStart >= 0) index--;
+            runSize = 0;
+            inGap = 1;
           }
-          gapSize += 1;
+          
+          runSize += 1;
+          
+          if (runSize == MAX_GAP || x == maxX) {
+            if (report) {
+              say("    Encoding gap of length "+runSize+"/"+MAX_GAP);
+              say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high);
+            }
+            store.data[index++] = (byte) 0xff;
+            store.data[index++] = (byte) runSize;
+            store.used = index;
+            runSize = 0;
+          }
         }
         else {
-          if (inGap) {
-            inGap = false;
+          if (inGap == 1 && runSize > 0) {
+            if (report) {
+              say("    Encoding gap of length "+runSize+"/"+MAX_GAP);
+              say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high);
+            }
+            inGap = 0;
             store.data[index++] = (byte) 0xff;
-            store.data[index++] = (byte) gapSize;
-            fillStartIndex = index++;
-            gapSize = 0;
+            store.data[index++] = (byte) runSize;
+            store.used = index;
+            fillStart = index++;
+            runSize = 0;
           }
           ARGBtoBytes(pix, store, index);
-          index += 2;
-          gapSize += 1;
+          index   += 2;
+          runSize += 1;
+          
+          if (runSize == MAX_FILL || x == maxX) {
+            store.data[fillStart] = (byte) runSize;
+            if (report) {
+              say("\n    Pixel-fill ended with size "+runSize+"/"+MAX_FILL);
+              say("      Indexes: "+fillStart+" -> "+index);
+              say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high);
+            }
+            fillStart = index++;
+            runSize = 0;
+          }
         }
+        
+        if (index >= maxIndex) break;
       }
     }
   }
@@ -392,15 +451,15 @@ public class Image_Utils {
   ;
   
   static void readIsometricBase(Bytes bytes, ImageRecord r) {
-    processIsometricBase(bytes, r, false);
+    isometricBasePass(bytes, r, false, false);
   }
   
-  static void writeIsometricBase(ImageRecord r, Bytes store) {
-    processIsometricBase(store, r, true);
+  static void writeIsometricBase(ImageRecord r, Bytes store, boolean wipe) {
+    isometricBasePass(store, r, true, wipe);
   }
   
-  static void processIsometricBase(
-    Bytes bytes, ImageRecord r, boolean write
+  static void isometricBasePass(
+    Bytes bytes, ImageRecord r, boolean write, boolean wipe
   ) {
     
     BufferedImage store = r.extracted;
@@ -430,11 +489,11 @@ public class Image_Utils {
       offsetX   *= tileHigh;
       
       for (int x = 0; x < maxX; x++) {
-        processIsometricTile(
+        isometricTilePass(
           bytes, index * tileBytes, r,
           offsetX, offsetY,
           tileWide, tileHigh,
-          write
+          write, wipe
         );
         index += 1;
         offsetX += tileWide + 2;
@@ -444,9 +503,10 @@ public class Image_Utils {
   }
   
   
-  static void processIsometricTile(
+  static void isometricTilePass(
     Bytes bytes, int offset, ImageRecord r,
-    int offX, int offY, int tileWide, int tileHigh, boolean write
+    int offX, int offY, int tileWide, int tileHigh,
+    boolean write, boolean wipe
   ) {
     BufferedImage store = r.extracted;
     
@@ -458,6 +518,7 @@ public class Image_Utils {
         if (write) {
           int ARGB = store.getRGB(offX + x, offY + y);
           ARGBtoBytes(ARGB, bytes, offset + i);
+          if (wipe) store.setRGB(offX + x, offY + y, 0);
         }
         else {
           int ARGB = bytesToARGB(bytes, offset + i);
@@ -500,13 +561,13 @@ public class Image_Utils {
   static void ARGBtoBytes(int ARGB, Bytes store, int offset) {
     if (offset + 1 >= store.data.length) return;
     
-    int stored = 0;
+    int stored = 1 << 15;
     stored |= ((ARGB & MASK_R8) >> 9) & MASK_R5;
     stored |= ((ARGB & MASK_G8) >> 6) & MASK_G5;
     stored |= ((ARGB & MASK_B8) >> 3) & MASK_B5;
     
-    store.data[offset    ] = (byte) ((stored >> 0) & 0xff);
-    store.data[offset + 1] = (byte) ((stored >> 8) & 0xff);
+    store.data[offset    ] = (byte) (stored >> 0);
+    store.data[offset + 1] = (byte) (stored >> 8);
     store.used = offset + 2;
   }
   
@@ -517,6 +578,7 @@ public class Image_Utils {
   static void displayImage(final BufferedImage image) {
     displayImage(image, 50, 50);
   }
+  
   
   static void displayImage(final BufferedImage image, int atX, int atY) {
     JFrame frame = new JFrame();
