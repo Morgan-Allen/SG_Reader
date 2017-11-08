@@ -113,7 +113,7 @@ public class Image_Utils {
       return true;
     }
     catch (IOException e) {
-      SG_Handler.say("Problem: "+e);
+      say("Problem: "+e);
       e.printStackTrace();
     }
     return false;
@@ -131,6 +131,55 @@ public class Image_Utils {
   }
   
   
+  static Bytes extractRawBytes(
+    ImageRecord record
+  ) throws IOException {
+    RandomAccessFile access = record.file.access;
+    if (access == null) return null;
+    //
+    //  First, ensure that the record is accessible and allocate space for
+    //  extracting the data:
+    //  TODO:  In later versions of this format, there may be extra
+    //  transparency pixels.  Check this.
+    Bytes bytes = new Bytes(record.dataLength);
+    access.seek(record.offset - (record.externalData ? 1 : 0));
+    access.read(bytes.data);
+    bytes.used = record.dataLength;
+    return bytes;
+  }
+  
+  
+  static BufferedImage imageFromBytes(
+    Bytes bytes,
+    ImageRecord record
+  ) throws IOException {
+    //
+    //  Allocate the image first:
+    BufferedImage image = record.extracted = new BufferedImage(
+      record.width, record.height, BufferedImage.TYPE_INT_ARGB
+    );
+    //
+    //  Isometric images are actually stitched together from both a
+    //  transparent upper and a diagonally-packed lower half, so they need
+    //  special treatment:
+    if (record.imageType == TYPE_ISOMETRIC) {
+      readIsometricImage(bytes, record);
+    }
+    //
+    //  Compression is used for any images with transparency, which means any
+    //  other walker-sprites in practice:
+    else if (record.compressed) {
+      readSpriteImage(bytes, record);
+    }
+    //
+    //  And finally, plain images are stored without compression:
+    else {
+      readPlainImage(bytes, record);
+    }
+    return image;
+  }
+  
+  
   static BufferedImage extractImage(ImageRecord record) {
     //
     //  Basic sanity checks first...
@@ -138,76 +187,96 @@ public class Image_Utils {
       return null;
     }
     try {
-      //
-      //  First, ensure that the record is accessible and allocate space for
-      //  extracting the data:
-      //  TODO:  In later versions of this format, there may be extra
-      //  transparency pixels.  Check this.
-      RandomAccessFile access = record.file.access;
-      if (access == null) return null;
-      
-      BufferedImage image = record.extracted = new BufferedImage(
-        record.width, record.height, BufferedImage.TYPE_INT_ARGB
-      );
-
-      Bytes bytes = new Bytes(record.dataLength);
-      access.seek(record.offset - (record.externalData ? 1 : 0));
-      access.read(bytes.data);
-      //
-      //  Isometric images are actually stitched together from both a
-      //  transparent upper and a diagonally-packed lower half, so they need
-      //  special treatment:
-      if (record.imageType == TYPE_ISOMETRIC) {
-        readIsometricImage(bytes, record);
-      }
-      //
-      //  Compression is used for any images with transparency, which means any
-      //  other walker-sprites in practice:
-      else if (record.compressed) {
-        readSpriteImage(bytes, record);
-      }
-      //
-      //  And finally, plain images are stored without compression:
-      else {
-        readPlainImage(bytes, record);
-      }
-      return image;
+      Bytes bytes = extractRawBytes(record);
+      return imageFromBytes(bytes, record);
     }
     catch (IOException e) {
-      SG_Handler.say("Problem: "+e);
+      say("Problem: "+e);
       e.printStackTrace();
     }
     return null;
   }
   
   
-  static void readIsometricImage(Bytes bytes, SG_Handler.ImageRecord r) {
+  static Bytes bytesFromImage(ImageRecord record, BufferedImage image) {
+    //
+    //  We allocate a buffer with some (hopefully) excess capacity for storing
+    //  the compressed image-
+    int capacity = record.width * record.height * 4;
+    Bytes store = new Bytes(capacity);
+    //
+    //  Isometric images are actually stitched together from both a
+    //  transparent upper and a diagonally-packed lower half, so they need
+    //  special treatment:
+    if (record.imageType == TYPE_ISOMETRIC) {
+      writeIsometricImage(record, store);
+    }
+    //
+    //  Compression is used for any images with transparency, which means any
+    //  other walker-sprites in practice:
+    else if (record.compressed) {
+      writeSpriteImage(record, store);
+    }
+    //
+    //  And finally, plain images are stored without compression:
+    else {
+      writePlainImage(record, store);
+    }
+    //
+    //  Finally, we trim the buffer down to size and return-
+    byte clipped[] = new byte[store.used];
+    System.arraycopy(store.data, 0, clipped, 0, store.used);
+    store.data = clipped;
+    return store;
+  }
+  
+  
+  static void readIsometricImage(Bytes bytes, ImageRecord r) {
     readIsometricBase(bytes, r);
     int done = r.lengthNoComp;
     readTransparentImage(bytes, done, r, r.dataLength - done);
   }
   
   
-  static void readSpriteImage(Bytes bytes, SG_Handler.ImageRecord r) {
+  static void writeIsometricImage(ImageRecord r, Bytes store) {
+    writeIsometricBase(r, store);
+    //  TODO:  Writing the isometric base will have to wipe the pixels touched
+    //  from the image-buffer, so they can be handled as transparent afterward.
+    
+    //  Okay.  Get a test-suite in place first.
+    
+    int done = store.used;
+    writeTransparentImage(r, r.dataLength, store, done);
+    //  TODO:  You'll need to create a new ImageRecord here, potentially with
+    //  new values for dataLength and lengthNoComp.
+  }
+  
+  
+  static void readSpriteImage(Bytes bytes, ImageRecord r) {
     readTransparentImage(bytes, 0, r, r.dataLength);
+  }
+  
+  
+  static void writeSpriteImage(ImageRecord r, Bytes store) {
+    writeTransparentImage(r, r.dataLength, store, 0);
   }
   
   
   
   /**  Utilities for reading/writing plain images-
     */
-  static void readPlainImage(Bytes bytes, SG_Handler.ImageRecord r) {
+  static void readPlainImage(Bytes bytes, ImageRecord r) {
     processPlainImage(bytes, r, false);
   }
   
   
-  static void writePlainImage(SG_Handler.ImageRecord r, Bytes store) {
+  static void writePlainImage(ImageRecord r, Bytes store) {
     processPlainImage(store, r, true);
   }
   
   
   static void processPlainImage(
-    Bytes bytes, SG_Handler.ImageRecord r, boolean write
+    Bytes bytes, ImageRecord r, boolean write
   ) {
     BufferedImage store = r.extracted;
     for (int x, y = 0, i = 0; y < store.getHeight(); y++) {
@@ -229,7 +298,7 @@ public class Image_Utils {
   /**  Utilities for reading/writing transparency-
     */
   static void readTransparentImage(
-    Bytes bytes, int offset, SG_Handler.ImageRecord r, int length
+    Bytes bytes, int offset, ImageRecord r, int length
   ) {
     BufferedImage store = r.extracted;
     int i = offset;
@@ -263,7 +332,7 @@ public class Image_Utils {
   
   
   static void writeTransparentImage(
-    SG_Handler.ImageRecord r, int length, Bytes store, int offset
+    ImageRecord r, int length, Bytes store, int offset
   ) {
     //  TODO:  You'll need a variable-length byte-buffer instead of an array,
     //  if a fresh image of variable size is being encoded.
@@ -322,29 +391,29 @@ public class Image_Utils {
     BIG_TILE_BYTES = 3200
   ;
   
-  static void readIsometricBase(Bytes bytes, SG_Handler.ImageRecord r) {
+  static void readIsometricBase(Bytes bytes, ImageRecord r) {
     processIsometricBase(bytes, r, false);
   }
   
-  static void writeIsometricBase(SG_Handler.ImageRecord r, Bytes store) {
+  static void writeIsometricBase(ImageRecord r, Bytes store) {
     processIsometricBase(store, r, true);
   }
   
   static void processIsometricBase(
-    Bytes bytes, SG_Handler.ImageRecord r, boolean write
+    Bytes bytes, ImageRecord r, boolean write
   ) {
     
     BufferedImage store = r.extracted;
     int wide      = store.getWidth();
     int high      = (wide + 2) / 2;
-    boolean big   = r.file.handler.version == SG_Handler.VERSION_EM;
+    boolean big   = r.file.handler.version == VERSION_EM;
     int tileWide  = big ? BIG_TILE_WIDE  : TILE_WIDE ;
     int tileHigh  = big ? BIG_TILE_HIGH  : TILE_HIGH ;
     int tileBytes = big ? BIG_TILE_BYTES : TILE_BYTES;
     int tileSpan  = high / tileHigh;
     
     if ((wide + 2) * high != r.lengthNoComp) {
-      SG_Handler.say("Isometric data size did not match: "+r.label);
+      say("Isometric data size did not match: "+r.label);
       return;
     }
 
@@ -376,7 +445,7 @@ public class Image_Utils {
   
   
   static void processIsometricTile(
-    Bytes bytes, int offset, SG_Handler.ImageRecord r,
+    Bytes bytes, int offset, ImageRecord r,
     int offX, int offY, int tileWide, int tileHigh, boolean write
   ) {
     BufferedImage store = r.extracted;
@@ -446,6 +515,10 @@ public class Image_Utils {
   /**  Dealing with the extracted images:
     */
   static void displayImage(final BufferedImage image) {
+    displayImage(image, 50, 50);
+  }
+  
+  static void displayImage(final BufferedImage image, int atX, int atY) {
     JFrame frame = new JFrame();
     JPanel pane = new JPanel() {
       final static long serialVersionUID = 0;
@@ -462,6 +535,7 @@ public class Image_Utils {
     frame.getContentPane().setPreferredSize(new Dimension(wide, high));
     frame.pack();
     
+    frame.setLocation(atX, atY);
     frame.setVisible(true);
     frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
   }
@@ -473,7 +547,7 @@ public class Image_Utils {
       ImageIO.write(image, "png", outputFile);
     }
     catch (Exception e) {
-      SG_Handler.say("Could not save: "+outPath+", problem: "+e);
+      say("Could not save: "+outPath+", problem: "+e);
       return;
     }
   }

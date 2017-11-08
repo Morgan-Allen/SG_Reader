@@ -2,6 +2,7 @@
 
 package sg_tools;
 import static sg_tools.SG_Handler.*;
+import static sg_tools.Image_Utils.*;
 import java.awt.image.*;
 import java.io.*;
 
@@ -184,7 +185,71 @@ public class SG_Utils {
   
   /**  Main execution method-
     */
+  static void testImagePacking() {
+    
+    final String testImageIDs[] = {
+      "empire_panels_3",
+      "Carts_692",
+      "Housng1a_42",
+    };
+    int dispX = 200;
+    
+    try {
+      say("\nTesting image un/packing...");
+      SG_Handler handler = new SG_Handler(VERSION_C3, false);
+      handler.basePath = "Caesar 3/";
+      File_SG file = handler.readFile_SG("C3_North.sg2");
+      
+      for (String ID : testImageIDs) {
+        
+        ImageRecord record = recordWithLabel(file, ID);
+        if (record == null) continue;
+        
+        Bytes bytesIn = extractRawBytes(record);
+        BufferedImage image = imageFromBytes(bytesIn, record);
+        if (image == null) return;
+        
+        Bytes bytesOut = bytesFromImage(record, image);
+        boolean result = checkPackResult(bytesIn, bytesOut);
+        if (result) {
+          System.out.println("Packed correctly- "+ID);
+        }
+        else {
+          System.out.println("Did not pack correctly! "+ID);
+        }
+        
+        Image_Utils.saveImage(image, ID+".png");
+        Image_Utils.displayImage(image, dispX += 100, 50);
+      }
+      
+      handler.closeAllFileAccess();
+    }
+    catch(Exception e) {
+      System.out.print("Problem: "+e);
+      e.printStackTrace();
+    }
+  }
+  
+  
+  static boolean checkPackResult(Bytes in, Bytes out) {
+    if (in.used != out.used) {
+      System.out.println("Different lengths: "+in.used+" vs. "+out.used);
+      return false;
+    }
+    for (int i = in.used; i-- > 0;) {
+      int VI = in .data[i] & 0xff;
+      int VO = out.data[i] & 0xff;
+      if (VI != VO) {
+        System.out.println("Differ at index: "+i+", "+VI+" vs. "+VO);
+        return false;
+      }
+    }
+    return true;
+  }
+  
+  
   public static void main(String args[]) {
+    testImagePacking();
     
     /*
     try {
@@ -195,13 +260,6 @@ public class SG_Utils {
       System.out.print("Problem: "+e);
       e.printStackTrace();
     }
-    //*/
-    
-    //*
-    unpackSingleImage(
-      //"Caesar 3/", "C3_North.sg2", VERSION_C3, "plateau_0", "plateau.png"
-      "Caesar 3/", "C3_North.sg2", VERSION_C3, "Housng1a_42", "housing_42.png"
-    );
     //*/
     
     /*
