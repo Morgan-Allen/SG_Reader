@@ -239,7 +239,10 @@ public class SG_Utils {
         
         ImageRecord record = recordWithLabel(file, ID);
         if (record == null) continue;
-        say("\n  File: "+ID+"  Size: "+record.width+" x "+record.height);
+        
+        String sizeDesc  = "  Size: "+record.width+" x "+record.height;
+        String bytesDesc = "  Bytes: "+record.dataLength;
+        say("\n  Image: "+ID+sizeDesc+bytesDesc);
         
         Bytes bytesIn = extractRawBytes(record);
         BufferedImage loaded = imageFromBytes(bytesIn, record);
@@ -307,7 +310,9 @@ public class SG_Utils {
         if (VI != VO) {
           Color inC  = new Color(VI);
           Color outC = new Color(VO);
-          say("  Differ at point: "+x+"|"+y+", "+inC+" -> "+outC);
+          say("  Differ at point: "+x+"|"+y);
+          say("    In value:  "+VI+" "+inC );
+          say("    Out value: "+VO+" "+outC);
           allOK = false;
           break pixLoop;
         }

@@ -362,73 +362,48 @@ public class Image_Utils {
     int maxX = wide - 1, maxIndex = offset + length;
     
     final int MAX_GAP = 255, MAX_FILL = 16;
-    int index     =  offset;
-    int inGap     = -1;
-    int runSize   = -1;
-    int fillStart = -1;
-    
-    //  TODO:  There's probably a more elegant way to handle this logic.
-    //         Look into it.
+    int index = offset;
+    int fillBuffer[] = new int[MAX_FILL];
+    int fillCount = 0, gapCount = 0;
     
     for (int y = 0; y < high; y++) {
+      int pixel = 0, next = img.getRGB(0, y);
+      
       for (int x = 0; x < wide; x++) {
-        int pix = img.getRGB(x, y);
-        boolean empty = (pix & 0xff000000) == 0;
+        boolean atEnd = x == maxX;
+        pixel = next;
+        next  = atEnd ? -1 : img.getRGB(x + 1, y);
+        boolean empty     = (pixel & 0xff000000) == 0;
+        boolean nextEmpty = (next  & 0xff000000) == 0;
         
         if (empty) {
-          if (inGap != 1) {
-            if (fillStart >= 0 && runSize > 0) {
-              store.data[fillStart] = (byte) runSize;
-              if (report) {
-                say("\n    Pixel-fill ended with size "+runSize+"/"+MAX_FILL);
-                say("      Indexes: "+fillStart+" -> "+index);
-                say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high);
-              }
-            }
-            else if (fillStart >= 0) index--;
-            runSize = 0;
-            inGap = 1;
-          }
+          gapCount++;
           
-          runSize += 1;
-          
-          if (runSize == MAX_GAP || x == maxX) {
+          if (gapCount == MAX_GAP || atEnd || ! nextEmpty) {
             if (report) {
-              say("    Encoding gap of length "+runSize+"/"+MAX_GAP);
-              say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high);
+              say("    Encoding gap of length "+gapCount+"/"+MAX_GAP);
+              say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high+" index: "+index);
             }
             store.data[index++] = (byte) 0xff;
-            store.data[index++] = (byte) runSize;
+            store.data[index++] = (byte) gapCount;
             store.used = index;
-            runSize = 0;
+            gapCount = 0;
           }
         }
         else {
-          if (inGap == 1 && runSize > 0) {
-            if (report) {
-              say("    Encoding gap of length "+runSize+"/"+MAX_GAP);
-              say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high);
-            }
-            inGap = 0;
-            store.data[index++] = (byte) 0xff;
-            store.data[index++] = (byte) runSize;
-            store.used = index;
-            fillStart = index++;
-            runSize = 0;
-          }
-          ARGBtoBytes(pix, store, index);
-          index   += 2;
-          runSize += 1;
+          fillBuffer[fillCount++] = pixel;
           
-          if (runSize == MAX_FILL || x == maxX) {
-            store.data[fillStart] = (byte) runSize;
+          if (fillCount == MAX_FILL || atEnd || nextEmpty) {
             if (report) {
-              say("\n    Pixel-fill ended with size "+runSize+"/"+MAX_FILL);
-              say("      Indexes: "+fillStart+" -> "+index);
-              say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high);
+              say("\n    Pixel-fill ended with size "+fillCount+"/"+MAX_FILL);
+              say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high+" index: "+index);
             }
-            fillStart = index++;
-            runSize = 0;
+            store.data[index++] = (byte) fillCount;
+            for (int i = 0; i < fillCount; i++) {
+              ARGBtoBytes(fillBuffer[i], store, index);
+              index += 2;
+            }
+            fillCount = 0;
           }
         }
         
