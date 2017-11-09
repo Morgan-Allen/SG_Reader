@@ -3,7 +3,6 @@
 package sg_tools;
 import static sg_tools.SG_Handler.*;
 import static sg_tools.SG_Utils555.*;
-import java.awt.*;
 import java.awt.image.*;
 import java.io.*;
 import javax.imageio.ImageIO;
@@ -91,8 +90,7 @@ public class SG_UtilsIO {
       say("\nReading main .SG file: "+basePath+fileSG);
       
       String baseFileName = noSuffix(fileSG);
-      SG_Handler handler = new SG_Handler(version, false);
-      handler.basePath = basePath;
+      SG_Handler handler = new SG_Handler(version, basePath, false);
       File_SG file = handler.readFile_SG(fileSG);
       
       File outDir = new File(outputPath);
@@ -162,8 +160,7 @@ public class SG_UtilsIO {
   ) {
     try {
       say("\nReading main .SG file: "+basePath+fileSG);
-      SG_Handler handler = new SG_Handler(version, false);
-      handler.basePath = basePath;
+      SG_Handler handler = new SG_Handler(version, basePath, false);
       File_SG file = handler.readFile_SG(fileSG);
       
       ImageRecord record = recordWithLabel(file, recordID);
@@ -190,16 +187,15 @@ public class SG_UtilsIO {
     try {
       say("\nReplacing image record: "+recordID+" in "+basePath+fileSG);
       
-      SG_Handler handler = new SG_Handler(version, false);
-      handler.basePath = basePath;
+      SG_Handler handler = new SG_Handler(version, basePath, false);
       File_SG file = handler.readFile_SG(fileSG);
       
       ImageRecord record = recordWithLabel(file, recordID);
       if (record == null) return;
       
-      //  TODO:  Automate this bit.
+      //  TODO:  Automate this bit?
       int offset = record.offset, length = record.dataLength;
-      if (record.externalData) offset -= 1;
+      if (record.externalData != 0) offset -= 1;
       BufferedImage image = ImageIO.read(new File(newImagePath));
       if (image == null) return;
       

@@ -68,7 +68,7 @@ public class SG_Utils555 {
     //
     //  Compression is used for any images with transparency, which means any
     //  other walker-sprites in practice:
-    else if (record.compressed) {
+    else if (record.compressed != 0) {
       writeTransparentImage(record, record.dataLength, store, 0);
     }
     //
@@ -136,8 +136,7 @@ public class SG_Utils555 {
         }
       }
       for (ImageRecord record : changed) {
-        record.flagAsChanged = true;
-        for (Bitmap b : record.belongs) toUpdate.add(b.file);
+        toUpdate.add(record.belongs.file);
       }
       
       say("  Records modified: "+changed .size());
@@ -145,48 +144,15 @@ public class SG_Utils555 {
       
       //
       //  Then we need to modify the associated entries in any SG2 files.
-      for (File_SG updated : toUpdate) {
-        try {
-          totalBytes = (int) new File(updated.fullpath).length();
-          byte copied[] = new byte[totalBytes];
-          int changedHere = 0;
-          say("\n  Updating "+updated.filename);
-          
-          RandomAccessFile in = new RandomAccessFile(updated.fullpath, "r");
-          in.read(copied);
-          in.close();
-          
-          String newPath = outPath+updated.filename;
-          RandomAccessFile out = new RandomAccessFile(newPath, "rw");
-          out.write(copied);
-          
-          int recordOffset = SG_OPENING_SIZE;
-          for (ImageRecord record : updated.records) {
-            if (record.flagAsChanged) {
-              out.seek(recordOffset);
-              file.handler.writeObjectFields(record, out);
-              changedHere += 1;
-            }
-            recordOffset += SG_RECORD_SIZE;
-          }
-          
-          say("  Total records updated: "+changedHere+"/"+updated.numRecords);
-          
-          out.close();
-        }
-        catch (IOException e) {
-          throw e;
-        }
-        catch (Exception e) {
-          say("Problem: "+e);
-          e.printStackTrace();
-        }
+      for (File_SG updated : toUpdate) try {
+        file.handler.copyAndModifyFile_SG(updated, changed, outPath);
       }
-      
-      //
-      //  Clean up and return:
-      for (ImageRecord record : changed) {
-        record.flagAsChanged = false;
+      catch (IOException e) {
+        throw e;
+      }
+      catch (Exception e) {
+        say("Problem: "+e);
+        e.printStackTrace();
       }
       return true;
     }
@@ -212,7 +178,7 @@ public class SG_Utils555 {
     //  TODO:  In later versions of this format, there may be extra
     //  transparency pixels.  Check this.
     Bytes bytes = new Bytes(record.dataLength);
-    access.seek(record.offset - (record.externalData ? 1 : 0));
+    access.seek(record.offset - (record.externalData != 0 ? 1 : 0));
     access.read(bytes.data);
     bytes.used = record.dataLength;
     return bytes;
@@ -240,7 +206,7 @@ public class SG_Utils555 {
     //
     //  Compression is used for any images with transparency, which means any
     //  other walker-sprites in practice:
-    else if (record.compressed) {
+    else if (record.compressed != 0) {
       readTransparentImage(bytes, 0, record, record.dataLength);
     }
     //

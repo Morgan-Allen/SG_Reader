@@ -1,6 +1,6 @@
 
 package sg_tools;
-import static sg_tools.SG_UtilsIO   .*;
+import static sg_tools.SG_UtilsIO .*;
 import static sg_tools.SG_Utils555.*;
 import static sg_tools.SG_Handler .*;
 import java.awt.Color;
@@ -13,6 +13,68 @@ public class RunTests {
   
   /**  Testing methods-
     */
+  static void testFileIO(
+    String basePath, String outputDir, String fileSG, int version
+  ) {
+    try {
+      say("\nTesting basic file I/O...");
+      SG_Handler handler = new SG_Handler(version, basePath, false);
+      File_SG file = handler.readFile_SG(fileSG);
+      
+      File original = new File(file.fullpath);
+      DataInputStream reader = inStream(file.fullpath, false);
+      final byte fullData[] = new byte[(int) original.length()];
+      reader.read(fullData);
+      reader.close();
+      
+      DataOutputStream OS = new DataOutputStream(
+        new BufferedOutputStream(
+          new FileOutputStream(new File(outputDir+file.filename))
+        )
+      ) {
+        int pointer = 0;
+        boolean diffed = false;
+        
+        public void write(int v) throws IOException {
+          if (! diffed) if (v != (fullData[pointer] & 0xff)) {
+            say("  First differ at "+pointer);
+            diffed = true;
+          }
+          super.write(v);
+          pointer++;
+        }
+        public void write(byte[] b) throws IOException {
+          if (! diffed) for (int i = 0; i < b.length; i++) {
+            if (b[i] != fullData[pointer + i]) {
+              say("  First differ at "+(pointer + i));
+              diffed = true;
+              break;
+            }
+          }
+          super.write(b);
+          pointer += b.length;
+        }
+      };
+      handler.writeFile_SG(file, OS);
+      OS.flush();
+      OS.close();
+      
+      say("  Total records: "+file.numRecords+", used: "+file.recordsUsed);
+      boolean filesSame = checkFilesSame(basePath, outputDir, file.filename);
+      if (filesSame) {
+        say("  "+fileSG+" identical after I/O.");
+      }
+      else {
+        say("  "+fileSG+" not identical after I/O.");
+      }
+    }
+    catch(Exception e) {
+      System.out.print("Problem: "+e);
+      e.printStackTrace();
+    }
+  }
+  
+  
   static void testImagePacking(
     String basePath, String outputDir, String fileSG, int version,
     String... testImageIDs
@@ -59,8 +121,7 @@ public class RunTests {
       if (! dirFile.exists()) dirFile.mkdirs();
       
       say("\nTesting image un/packing...");
-      SG_Handler handler = new SG_Handler(version, false);
-      handler.basePath = basePath;
+      SG_Handler handler = new SG_Handler(version, basePath, false);
       File_SG file = handler.readFile_SG(fileSG);
       
       for (String ID : testImageIDs) {
@@ -191,7 +252,7 @@ public class RunTests {
     
     //  Now verify that the SG files in question are identical-
     for (String filename : testFilenames) {
-      boolean same = testFilesSame(basePath, outputDir, filename);
+      boolean same = checkFilesSame(basePath, outputDir, filename);
       if (same) {
         say("  "+filename+" identical in output directory.");
       }
@@ -202,7 +263,7 @@ public class RunTests {
   }
   
   
-  static boolean testFilesSame(
+  static boolean checkFilesSame(
     String basePath, String outputDir, String filename
   ) {
     try {
@@ -233,6 +294,8 @@ public class RunTests {
   /**  Basic test-suite...
     */
   public static void main(String args[]) {
+    
+    testFileIO("Caesar 3/", "output_test/", "C3_North.sg2", VERSION_C3);
     
     final String testImageIDs[] = {
       "empire_panels_3",

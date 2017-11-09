@@ -4,7 +4,6 @@ package sg_tools;
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.ArrayList;
-import java.util.Hashtable;
 import java.awt.image.BufferedImage;
 
 
@@ -31,7 +30,9 @@ public class SG_Handler {
       (SG_BITMAP_SIZE * 100)
     )
   ;
-  final static File_555 NOT_FOUND = new File_555();
+  final static File_555
+    NO_555 = new File_555()
+  ;
   
   
   int version;
@@ -40,8 +41,6 @@ public class SG_Handler {
   
   ArrayList <File_SG > allSG  = new ArrayList();
   ArrayList <File_555> all555 = new ArrayList();
-  
-  Hashtable <String, ImageRecord> recordsLookup = new Hashtable();
   
   
   static class File_SG {
@@ -71,6 +70,7 @@ public class SG_Handler {
     
     Bitmap bitmaps[] = new Bitmap[100];
     ImageRecord records[];
+    File_555 lookup555;
     ArrayList <File_555> distinctRefs = new ArrayList();
   }
   
@@ -109,6 +109,8 @@ public class SG_Handler {
     File_SG file;
     String name;
     String comment;
+    
+    File_555 lookup555;
     ArrayList <ImageRecord> records = new ArrayList();
   }
   
@@ -134,9 +136,9 @@ public class SG_Handler {
     byte canReverse;
     byte unknown5;
     byte imageType;
-    boolean compressed;
-    boolean externalData;
-    boolean partCompressed;
+    byte compressed;
+    byte externalData;
+    byte partCompressed;
     byte unknown6[] = new byte[2];
     byte bitmapID;
     byte unknown7;
@@ -147,10 +149,9 @@ public class SG_Handler {
     
     //  Extra fields for subsequent processing:
     File_555 file;
-    ArrayList <Bitmap> belongs = new ArrayList();
+    Bitmap belongs;
     BufferedImage extracted;
     String label;
-    String lookupKey;
     boolean flagAsChanged = false;
   }
   
@@ -158,15 +159,15 @@ public class SG_Handler {
   
   /**  File parsing routines-
     */
-  SG_Handler(int version, boolean verbose) {
-    this.version = version;
-    this.verbose = verbose;
+  SG_Handler(int version, String basePath, boolean verbose) {
+    this.version  = version ;
+    this.basePath = basePath;
+    this.verbose  = verbose ;
   }
   
   
-  void readAllFiles_SG(String basePath) throws Exception {
+  void readAllFilesInBaseDir() throws Exception {
     
-    this.basePath = basePath;
     File mainDir = new File(basePath);
     
     String suffix_SG = null;
@@ -238,52 +239,26 @@ public class SG_Handler {
     file.records = new ImageRecord[file.numRecords];
     for (int i = 0; i < file.numRecords; i++) {
       
-      //
-      //  First, load the raw record data...
       ImageRecord r = file.records[i] = new ImageRecord();
       readObjectFields(r, file.IS);
+      
       report("\n  Loaded Image Record...");
       printObjectFields(r, "    ");
       
-      //
-      //  Then lookup the corresponding 555 File, assuming it exists.  (If it
-      //  doesn't then we skip this record and move on)-
-      Bitmap belongs = file.bitmaps[r.bitmapID];
-      lookupFile_555(r, belongs);
-      if (r.file == NOT_FOUND) continue;
+      r.belongs = file.bitmaps[r.bitmapID];
+      r.label   = noSuffix(r.belongs.name)+"_"+r.belongs.records.size();
+      r.belongs.records.add(r);
       
-      //
-      //  Next, we compute a unique key for this record based on the 555 file
-      //  it refers to and the data offset for image extraction...
-      String lookupKey = noSuffix(r.file.filename)+"_"+r.offset;
-      ImageRecord match = recordsLookup.get(lookupKey);
+      r.file = lookupFile_555(r, r.belongs);
+      if (r.file == null) continue;
       
-      //
-      //  If such a record already exists, we will substitute that in the SG
-      //  file's record-list instead, and discard the record we just read in-
-      //  we don't want any duplicate entries.
-      if (match != null) {
-        r = file.records[i] = match;
-        r.belongs.add(belongs);
+      r.file.referring.add(r);
+      
+      if (! r.file.distinctRefs.contains(file)) {
+        r.file.distinctRefs.add(file);
       }
-      
-      //
-      //  If this is a genuinely new image-record, give it a fresh label and
-      //  hook up the internal reference graph to keep track:
-      else {
-        r.label     = noSuffix(belongs.name)+"_"+belongs.records.size();
-        r.lookupKey = lookupKey;
-        belongs.records.add(r);
-        recordsLookup.put(lookupKey, r);
-        r.file.referring.add(r);
-        r.belongs.add(belongs);
-        
-        if (! r.file.distinctRefs.contains(file)) {
-          r.file.distinctRefs.add(file);
-        }
-        if (! file.distinctRefs.contains(r.file)) {
-          file.distinctRefs.add(r.file);
-        }
+      if (! file.distinctRefs.contains(r.file)) {
+        file.distinctRefs.add(r.file);
       }
     }
     
@@ -295,60 +270,65 @@ public class SG_Handler {
   }
   
   
-  void lookupFile_555(ImageRecord record, Bitmap bitmap) {
+  File_555 lookupFile_555(ImageRecord record, Bitmap bitmap) {
     
     //
-    //  First, check to see if the corresponding lookup is already cached:
-    if (record.file != null) return;
+    //  To start, check to see if we've already looked up the 555 file for
+    //  the parent bitmap or SG file:
+    boolean external = record.externalData != 0;
+    File_555 lookup = external ?
+      bitmap.     lookup555 :
+      bitmap.file.lookup555
+    ;
+    if (lookup == NO_555) {
+      return null;
+    }
+    if (lookup != null) {
+      return lookup;
+    }
     
     //
-    //  Otherwise, determine what file we need to look at in order to extract
-    //  image data.  If that doesn't exist, return nothing-
-    String lookup = null;
+    //  Failing that, check to see if a corresponding file exists in either
+    //  the same directory or the /555/ folder-
+    String baseName = noSuffix(external ? bitmap.name : bitmap.file.filename);
+    baseName += ".555";
     
-    if (record.externalData) {
-      lookup = noSuffix(bitmap.name);
-      if (lookup.isEmpty()) {
-        record.file = NOT_FOUND;
-        return;
-      }
-      lookup = lookup+".555";
-      if (! fileExists(basePath+lookup)) {
-        lookup = "555/"+lookup;
-      }
+    if (! fileExists(basePath+baseName)) {
+      baseName = "555/"+baseName;
     }
-    else {
-      lookup = noSuffix(bitmap.file.filename)+".555";
-    }
-    if (! fileExists(basePath+lookup)) {
-      record.file = NOT_FOUND;
-      return;
+    if (! fileExists(basePath+baseName)) {
+      if (external) bitmap.     lookup555 = NO_555;
+      else          bitmap.file.lookup555 = NO_555;
+      return null;
     }
     
     //
     //  If such a file exists, see if we've already allocated a corresponding
-    //  object.  Failing that, create a new one.  Failing that, return nothing-
+    //  object.  Failing that, create a new one.
     File_555 file = null;
-    for (File_555 f : all555) if (f.filename.equals(lookup)) {
+    for (File_555 f : all555) if (f.filename.equals(baseName)) {
       file = f;
       break;
     }
     if (file == null) try {
       file = new File_555();
-      file.filename = lookup;
-      file.fullpath = basePath+lookup;
+      file.filename = baseName;
+      file.fullpath = basePath+baseName;
       file.handler  = this;
       file.access   = new RandomAccessFile(file.fullpath, "r");
       all555.add(file);
     }
     catch (IOException e) {
-      record.file = NOT_FOUND;
-      return;
+      say("Problem: "+e);
+      file = NO_555;
     }
     
     //
-    //  If everything works out, record the file and return-
-    record.file = file;
+    //  Cache for later reference, and return-
+    if (external) bitmap.     lookup555 = file;
+    else          bitmap.file.lookup555 = file;
+    if (file == NO_555) return null;
+    return file;
   }
   
   
@@ -380,10 +360,63 @@ public class SG_Handler {
   
   
   
+  /**  Methods for writing or modifying SG files:
+    */
+  void writeFile_SG(File_SG file, String outputPath) throws Exception {
+    report("\nWriting SG File: "+outputPath);
+    DataOutputStream OS = SG_UtilsIO.outStream(outputPath, false);
+    writeFile_SG(file, OS);
+    OS.flush();
+    OS.close();
+  }
+  
+
+  void writeFile_SG(File_SG file, DataOutput OS) throws Exception {
+    writeObjectFields(file, OS);
+    for (Bitmap      b : file.bitmaps) writeObjectFields(b, OS);
+    for (ImageRecord r : file.records) writeObjectFields(r, OS);
+  }
+  
+  
+  void copyAndModifyFile_SG(
+    File_SG file, ArrayList <ImageRecord> changed, String outputDir
+  ) throws Exception {
+    
+    for (ImageRecord record : changed) record.flagAsChanged = true;
+    
+    int totalBytes = (int) new File(file.fullpath).length();
+    byte copied[] = new byte[totalBytes];
+    int changedHere = 0;
+    say("\n  Updating "+file.filename);
+    
+    RandomAccessFile in = new RandomAccessFile(file.fullpath, "r");
+    in.read(copied);
+    in.close();
+    
+    String newPath = outputDir+file.filename;
+    RandomAccessFile out = new RandomAccessFile(newPath, "rw");
+    out.write(copied);
+    
+    int recordOffset = SG_OPENING_SIZE;
+    for (ImageRecord record : file.records) {
+      if (record.flagAsChanged) {
+        out.seek(recordOffset);
+        file.handler.writeObjectFields(record, out);
+        changedHere += 1;
+      }
+      recordOffset += SG_RECORD_SIZE;
+    }
+    
+    say("  Total records updated: "+changedHere+"/"+file.numRecords);
+    
+    for (ImageRecord record : changed) record.flagAsChanged = false;
+    out.close();
+  }
+  
+  
+  
   /**  Reflection-based utilities for reading/writing object fields:
     */
-  //  TODO:  Move these into the Utils class?
-  
   int readInt(DataInput i) throws Exception {
     return
       (i.readByte() & 0xFF) << 0  |
@@ -417,7 +450,7 @@ public class SG_Handler {
   }
   
   void writeChar(byte val, DataOutput o) throws Exception {
-    o.write((int) val);
+    o.write((int) (val & 0xff));
   }
   
   boolean readBoolean(DataInput i) throws Exception {
@@ -465,7 +498,7 @@ public class SG_Handler {
   }
   
   
-  void writeObjectFields(Object o, RandomAccessFile out) throws Exception {
+  void writeObjectFields(Object o, DataOutput out) throws Exception {
     Field fields[] = o.getClass().getDeclaredFields();
     
     for (Field f : fields) {
