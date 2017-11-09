@@ -304,6 +304,8 @@ public class RunTests {
     
     testFileIO(C3_DIR_PATH, "output_test/", "C3_North.sg2", VERSION_C3);
     
+    //packVerbose = true;
+    
     final String testImageIDs[] = {
       "empire_panels_3",
       "Carts_692",
