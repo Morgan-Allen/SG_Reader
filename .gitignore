@@ -4,7 +4,9 @@
 *.txt
 .classpath
 .project
+.settings
 citybuilding-tools-master/
 C3 Files/
 Caesar 3/
 output*
+custom*

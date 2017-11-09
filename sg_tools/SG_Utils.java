@@ -8,6 +8,8 @@ import java.awt.image.*;
 import java.io.*;
 import javax.imageio.ImageIO;
 
+import sg_tools.SG_Handler.ImageRecord;
+
 
 
 
@@ -457,7 +459,40 @@ public class SG_Utils {
     //*/
     
     try {
+      SG_Handler handler = new SG_Handler(VERSION_C3, false);
+      handler.basePath = "Caesar 3/";
+      File_SG file = handler.readFile_SG("Etruscan.sg2");
       
+      String outPath = "output_c3/";
+      ImageRecord updated = file.records[9];
+      updated.flagAsChanged = true;
+      
+      int totalBytes = (int) new File(file.fullpath).length();
+      byte copied[] = new byte[totalBytes];
+      
+      RandomAccessFile in = new RandomAccessFile(file.fullpath, "r");
+      in.read(copied);
+      in.close();
+      
+      String newPath = outPath+file.filename;
+      RandomAccessFile out = new RandomAccessFile(newPath, "rw");
+      out.write(copied);
+      
+      int recordOffset = SG_OPENING_SIZE;
+      for (ImageRecord record : file.records) {
+        if (record.flagAsChanged) {
+          out.seek(recordOffset);
+          file.handler.writeObjectFields(record, out);
+        }
+        recordOffset += SG_RECORD_SIZE;
+      }
+      
+      out.close();
+      updated.flagAsChanged = false;
+      
+      
+      boolean same = testFilesSame(handler.basePath, outPath, file.filename);
+      say("\nFILES ARE SAME? "+same);
     }
     catch(Exception e) {
       System.out.print("Problem: "+e);

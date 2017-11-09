@@ -210,6 +210,7 @@ public class SG_Handler {
     report("\nReading SG File: "+filename);
     
     File_SG file = new File_SG();
+    file.handler  = this;
     file.filename = filename;
     file.fullpath = basePath+filename;
     file.IS = SG_Utils.inStream(file.fullpath, false);
@@ -516,6 +517,8 @@ public class SG_Handler {
       String name  = f.getName();
       Object value = f.get(o);
       
+      if (name.equals("BREAK")) break;
+      
       out.append(indent);
       out.append(name);
       out.append(":");
@@ -523,7 +526,10 @@ public class SG_Handler {
       for (int p = maxNameLength + 1 - name.length(); p-- > 0;) {
         out.append(' ');
       }
-      if (type.isArray()) {
+      if (value == null) {
+        out.append("<none>");
+      }
+      else if (type.isArray()) {
         out.append("["+type.getComponentType());
         out.append(" x"+Array.getLength(value)+"]");
       }
