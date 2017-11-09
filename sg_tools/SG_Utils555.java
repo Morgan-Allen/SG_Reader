@@ -57,11 +57,10 @@ public class SG_Utils555 {
       record.extracted = new BufferedImage(cm, raster, alphaPM, null);
       
       isometricBasePass(store, record, true, true);
-      int done = store.used;
-      writeTransparentImage(record, record.dataLength - done, store, done);
+      int done = store.used, maxY = isometricFringeHeight(record);
+      writeTransparentImage(record, store, done, maxY);
       
-      //  TODO:  You'll need to create a new ImageRecord here, potentially with
-      //  new values for dataLength and lengthNoComp.
+      //  TODO:  You'll need to create a new ImageRecord here?
       record.lengthNoComp = done;
       record.dataLength   = store.used;
     }
@@ -69,7 +68,10 @@ public class SG_Utils555 {
     //  Compression is used for any images with transparency, which means any
     //  other walker-sprites in practice:
     else if (record.compressed != 0) {
-      writeTransparentImage(record, record.dataLength, store, 0);
+      writeTransparentImage(record, store, 0, -1);
+      
+      //  TODO:  You'll need to create a new ImageRecord here?
+      record.dataLength = store.used;
     }
     //
     //  And finally, plain images are stored without compression:
@@ -308,14 +310,14 @@ public class SG_Utils555 {
   
   
   static void writeTransparentImage(
-    ImageRecord r, int length, Bytes store, int offset
+    ImageRecord r, Bytes store, int offset, int maxY
   ) {
     boolean report = packVerbose;
     if (report) say("\nWriting transparent image bytes...");
     
     BufferedImage img = r.extracted;
     int high = img.getHeight(), wide = img.getWidth();
-    int maxX = wide - 1, maxIndex = offset + length;
+    int maxX = wide - 1;
     
     final int MAX_GAP = 255, MAX_FILL = 16;
     int index = offset;
@@ -323,6 +325,7 @@ public class SG_Utils555 {
     int fillCount = 0, gapCount = 0;
     
     for (int y = 0; y < high; y++) {
+      if (maxY > 0 && y + 1 == maxY) break;
       int pixel = 0, next = img.getRGB(0, y);
       
       for (int x = 0; x < wide; x++) {
@@ -362,8 +365,6 @@ public class SG_Utils555 {
             fillCount = 0;
           }
         }
-        
-        if (index >= maxIndex) break;
       }
     }
   }
@@ -380,6 +381,14 @@ public class SG_Utils555 {
     BIG_TILE_HIGH  = 40  ,
     BIG_TILE_BYTES = 3200
   ;
+  
+  
+  static int isometricFringeHeight(ImageRecord r) {
+    BufferedImage store = r.extracted;
+    int wide     = store.getWidth();
+    int halfHigh = (wide + 2) / 4;
+    return store.getHeight() - halfHigh;
+  }
   
   
   static void isometricBasePass(
@@ -499,6 +508,12 @@ public class SG_Utils555 {
   
   /**  Dealing with the extracted images:
     */
+  static BufferedImage loadImage(String filename) {
+    try { return ImageIO.read(new File(filename)); }
+    catch (Exception e) { return null; }
+  }
+  
+  
   static void displayImage(final BufferedImage image) {
     displayImage(image, 50, 50);
   }
