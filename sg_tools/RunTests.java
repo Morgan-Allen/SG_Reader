@@ -26,6 +26,9 @@ public class RunTests {
       final byte fullData[] = new byte[(int) original.length()];
       reader.read(fullData);
       reader.close();
+
+      File dirFile = new File(outputDir);
+      if (! dirFile.exists()) dirFile.mkdirs();
       
       DataOutputStream OS = new DataOutputStream(
         new BufferedOutputStream(
@@ -293,9 +296,13 @@ public class RunTests {
   
   /**  Basic test-suite...
     */
+  final static String
+    C3_DIR_PATH = "C:/Program Files (x86)/GOG Galaxy/Games/Caesar 3/"
+  ;
+  
   public static void main(String args[]) {
     
-    testFileIO("Caesar 3/", "output_test/", "C3_North.sg2", VERSION_C3);
+    testFileIO(C3_DIR_PATH, "output_test/", "C3_North.sg2", VERSION_C3);
     
     final String testImageIDs[] = {
       "empire_panels_3",
@@ -306,11 +313,11 @@ public class RunTests {
       "Housng1a_47",
     };
     testImagePacking(
-      "Caesar 3/", "output_test/", "C3.sg2", VERSION_C3, testImageIDs
+      C3_DIR_PATH, "output_test/", "C3.sg2", VERSION_C3, testImageIDs
     );
     
     testImageSubstitution(
-      "Caesar 3/", "C3.sg2", VERSION_C3,
+      C3_DIR_PATH, "C3.sg2", VERSION_C3,
       "Housng1a_42", "output_test/temp_house_42.png", "output_test/",
       "C3.sg2",
       "C3.555"
