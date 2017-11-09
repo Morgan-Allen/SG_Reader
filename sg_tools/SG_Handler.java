@@ -131,7 +131,7 @@ public class SG_Handler {
     short spriteOffY;
     byte unknown4[] = new byte[10];
     
-    boolean canReverse;
+    byte canReverse;
     byte unknown5;
     byte imageType;
     boolean compressed;
@@ -437,7 +437,7 @@ public class SG_Handler {
   }
   
   
-  void readObjectFields(Object o, DataInputStream i) throws Exception {
+  void readObjectFields(Object o, DataInput i) throws Exception {
     Field fields[] = o.getClass().getDeclaredFields();
     
     for (Field f : fields) {

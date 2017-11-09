@@ -205,10 +205,10 @@ public class SG_Utils {
       BufferedImage image = ImageIO.read(new File(newImagePath));
       if (image == null) return;
       
-      Bytes asBytes = Image_Utils.bytesFromImage(
+      Bytes asBytes = bytesFromImage(
         record, image
       );
-      Image_Utils.replaceImageBytes(
+      replaceImageBytes(
         offset, length, asBytes.data, record.file, outputDir
       );
     }
@@ -458,49 +458,7 @@ public class SG_Utils {
     testImagePacking("Caesar 3/", "C3.sg2", VERSION_C3, testImageIDs);
     //*/
     
-    try {
-      SG_Handler handler = new SG_Handler(VERSION_C3, false);
-      handler.basePath = "Caesar 3/";
-      File_SG file = handler.readFile_SG("Etruscan.sg2");
-      
-      String outPath = "output_c3/";
-      ImageRecord updated = file.records[9];
-      updated.flagAsChanged = true;
-      
-      int totalBytes = (int) new File(file.fullpath).length();
-      byte copied[] = new byte[totalBytes];
-      
-      RandomAccessFile in = new RandomAccessFile(file.fullpath, "r");
-      in.read(copied);
-      in.close();
-      
-      String newPath = outPath+file.filename;
-      RandomAccessFile out = new RandomAccessFile(newPath, "rw");
-      out.write(copied);
-      
-      int recordOffset = SG_OPENING_SIZE;
-      for (ImageRecord record : file.records) {
-        if (record.flagAsChanged) {
-          out.seek(recordOffset);
-          file.handler.writeObjectFields(record, out);
-        }
-        recordOffset += SG_RECORD_SIZE;
-      }
-      
-      out.close();
-      updated.flagAsChanged = false;
-      
-      
-      boolean same = testFilesSame(handler.basePath, outPath, file.filename);
-      say("\nFILES ARE SAME? "+same);
-    }
-    catch(Exception e) {
-      System.out.print("Problem: "+e);
-      e.printStackTrace();
-    }
-    
-    
-    /*
+    //*
     testImageSubstitution(
       "Caesar 3/", "C3.sg2", VERSION_C3,
       "Housng1a_42", "output_c3/temp_house_42.png", "output_c3/",

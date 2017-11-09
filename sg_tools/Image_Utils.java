@@ -90,6 +90,7 @@ public class Image_Utils {
     File_555 file, String outPath
   ) {
     try {
+      say("\nReplacing image bytes...");
       //
       //  Create the output directory if it isn't there already:
       File outDir = new File(outPath);
@@ -139,12 +140,17 @@ public class Image_Utils {
         for (Bitmap b : record.belongs) toUpdate.add(b.file);
       }
       
+      say("  Records modified: "+changed .size());
+      say("  Files to update:  "+toUpdate.size());
+      
       //
       //  Then we need to modify the associated entries in any SG2 files.
       for (File_SG updated : toUpdate) {
         try {
           totalBytes = (int) new File(updated.fullpath).length();
           byte copied[] = new byte[totalBytes];
+          int changedHere = 0;
+          say("\n  Updating "+updated.filename);
           
           RandomAccessFile in = new RandomAccessFile(updated.fullpath, "r");
           in.read(copied);
@@ -159,9 +165,12 @@ public class Image_Utils {
             if (record.flagAsChanged) {
               out.seek(recordOffset);
               file.handler.writeObjectFields(record, out);
+              changedHere += 1;
             }
             recordOffset += SG_RECORD_SIZE;
           }
+          
+          say("  Total records updated: "+changedHere+"/"+updated.numRecords);
           
           out.close();
         }
