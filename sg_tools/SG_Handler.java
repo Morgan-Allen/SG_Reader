@@ -213,7 +213,7 @@ public class SG_Handler {
     file.handler  = this;
     file.filename = filename;
     file.fullpath = basePath+filename;
-    file.IS = SG_Utils.inStream(file.fullpath, false);
+    file.IS = SG_UtilsIO.inStream(file.fullpath, false);
     
     readObjectFields(file, file.IS);
     printObjectFields(file, "");

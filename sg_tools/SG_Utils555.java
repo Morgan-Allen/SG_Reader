@@ -12,7 +12,7 @@ import java.util.HashSet;
 
 
 
-public class Image_Utils {
+public class SG_Utils555 {
   
   
   /**  Some initial constants and utility containers:
@@ -112,7 +112,7 @@ public class Image_Utils {
       //
       //  Then we create a new file that basically sandwiches the new data
       //  between these two segments.
-      DataOutputStream OS = SG_Utils.outStream(outPath+file.filename, false);
+      DataOutputStream OS = SG_UtilsIO.outStream(outPath+file.filename, false);
       OS.write(below);
       OS.write(newBytes);
       OS.write(above);
