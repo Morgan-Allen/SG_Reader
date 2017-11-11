@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include "SG_Handler.hpp"
+//#include "SG_Utils_555.hpp"
+#include "graphics_test.hpp"
 
 #include <dirent.h>
 #include <limits.h>
@@ -37,8 +39,11 @@ int main(int numArgs, const char *args[]) {
     //*/
     
     
-    File_SG* file = readFile(filename, true);
-    delete file;
+    call_graphics();
+    
+    
+    //File_SG* file = readFile(filename, true);
+    //delete file;
     
     return 0;
 }
