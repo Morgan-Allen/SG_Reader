@@ -11,6 +11,11 @@ using namespace std;
 
 
 
+typedef unsigned int   uint  ;
+typedef unsigned char  byte  ;
+typedef unsigned short ushort;
+
+
 const int
     VERSION_C3 = 0,
     VERSION_PH = 1,
@@ -31,88 +36,77 @@ const int
 
 struct SG_Header {
     
-    int filesize;
-    int version;
-    int unknown1;
-    int numRecords;
-    int recordsUsed;
-    int unknown2;
-    int totalFilesize;
-    int inner555Size;
-    int outer555Size;
-    int unknown3[11];
+    uint filesize;
+    uint version;
+    uint unknown1;
+    uint numRecords;
+    uint recordsUsed;
+    uint unknown2;
+    uint totalFilesize;
+    uint inner555Size;
+    uint outer555Size;
+    uint unknown3[11];
     
-    short index[300];
+    ushort index[300];
 };
 
 
 struct Bitmap {
     
-    char nameChars   [65];
-    char commentChars[51];
-    int width;
-    int height;
-    int numImages;
-    int startIndex;
-    int endIndex;
-    char unknown[64];
-};
-
-struct BitmapDigest {
-    Bitmap bitmap;
+    byte nameChars   [65];
+    byte commentChars[51];
+    uint width;
+    uint height;
+    uint numImages;
+    uint startIndex;
+    uint endIndex;
+    byte unknown[64];
 };
 
 
 struct ImageRecord {
     
-    int offset;
-    int dataLength;
-    int lengthNoComp;
-    int unknown1;
-    int inverseOffset;
+    uint offset;
+    uint dataLength;
+    uint lengthNoComp;
+    uint unknown1;
+    uint inverseOffset;
     
-    short width;
-    short height;
-    char unknown2[6];
-    short numAnims;
-    short unknown3;
-    short spriteOffX;
-    short spriteOffY;
-    char unknown4[10];
+    ushort width;
+    ushort height;
+    byte unknown2[6];
+    ushort numAnims;
+    ushort unknown3;
+    ushort spriteOffX;
+    ushort spriteOffY;
+    byte unknown4[10];
     
-    char canReverse;
-    char unknown5;
-    char imageType;
-    char compressed;
-    char externalData;
-    char partCompressed;
-    char unknown6[2];
-    char bitmapID;
-    char unknown7;
-    char animSpeedID;
-    char unknown8[5];
+    byte canReverse;
+    byte unknown5;
+    byte imageType;
+    byte compressed;
+    byte externalData;
+    byte partCompressed;
+    byte unknown6[2];
+    byte bitmapID;
+    byte unknown7;
+    byte animSpeedID;
+    byte unknown8[5];
 };
-
-struct ImageRecordDigest {
-    ImageRecord record;
-};
-
 
 
 struct File_SG {
     SG_Header header;
-    BitmapDigest bitmaps[100];
-    vector <ImageRecordDigest> records;
+    Bitmap bitmaps[100];
+    vector <ImageRecord> records;
 };
-
-
 
 struct File_555 {
-    //  ???
+    vector <File_SG> referredBy;
 };
 
 
-
+File_SG* readFile(string filename);
 
 
 
