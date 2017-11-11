@@ -24,13 +24,14 @@ const int
 ;
 const int
     SG_HEADER_SIZE = 80 ,
-    SG_BITMAP_SIZE = 200,
-    SG_RECORD_SIZE = 64 ,
     SG_INDEX_SIZE  = 600,
+    SG_NUM_BITMAPS = 100,
+    SG_BITMAP_SIZE = 200,
     SG_OPENING_SIZE = (
         SG_HEADER_SIZE + SG_INDEX_SIZE +
-        (SG_BITMAP_SIZE * 100)
-    )
+        (SG_BITMAP_SIZE * SG_NUM_BITMAPS)
+    ),
+    SG_RECORD_SIZE = 64
 ;
 
 
@@ -97,7 +98,7 @@ struct ImageRecord {
 
 struct File_SG {
     SG_Header header;
-    Bitmap bitmaps[100];
+    Bitmap bitmaps[SG_NUM_BITMAPS];
     vector <ImageRecord> records;
 };
 
@@ -106,7 +107,7 @@ struct File_555 {
 };
 
 
-File_SG* readFile(string filename);
+File_SG* readFile(string filename, bool report);
 
 
 

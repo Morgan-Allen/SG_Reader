@@ -17,12 +17,13 @@
 
 int main(int numArgs, const char *args[]) {
     
+    string basePath = "/Users/morganallen/Desktop/Programming/SG Tools Project/";
+    string filename = basePath + "Caesar 3/C3_North.sg2";
+    
+    /*
     char buf[PATH_MAX + 1];
     realpath(".", buf);
     cout << "\nWORKING DIRECTORY: " << buf;
-    
-    string basePath = "/Users/morganallen/Desktop/Programming/SG Tools Project/";
-    string filename = basePath + "Caesar 3/C3_North.sg2";
     
     cout << "\nREADING FILES IN BASE DIRECTORY...";
     DIR* dirp = opendir(basePath.c_str());
@@ -33,21 +34,15 @@ int main(int numArgs, const char *args[]) {
         cout << "\n  " << name;
     }
     closedir(dirp);
+    //*/
     
     
-    
-    File_SG* file = readFile(filename);
-    uint filesize   = file->header.filesize;
-    uint version    = file->header.version;
-    uint numRecords = file->header.numRecords;
-    
-    cout << "\nFinished reading file: " << filename;
-    cout << "\n  File size:     " << filesize  ;
-    cout << "\n  File version:  " << version   ;
-    cout << "\n  Total records: " << numRecords;
-    cout << "\n\n";
+    File_SG* file = readFile(filename, true);
+    delete file;
     
     return 0;
 }
+
+
 
 
