@@ -7,6 +7,7 @@
 //
 #include <stdio.h>
 #include <vector>
+#include <string>
 using namespace std;
 
 
@@ -33,6 +34,10 @@ const int
     ),
     SG_RECORD_SIZE = 64
 ;
+
+struct SG_Header;
+struct Bitmap;
+struct ImageRecord;
 
 
 struct SG_Header {
@@ -62,6 +67,8 @@ struct Bitmap {
     uint startIndex;
     uint endIndex;
     byte unknown[64];
+    
+    vector <ImageRecord*> records;
 };
 
 
@@ -93,17 +100,20 @@ struct ImageRecord {
     byte unknown7;
     byte animSpeedID;
     byte unknown8[5];
+    
+    Bitmap* belongs;
+    string label;
 };
 
 
 struct File_SG {
     SG_Header header;
     Bitmap bitmaps[SG_NUM_BITMAPS];
-    vector <ImageRecord> records;
+    vector <ImageRecord*> records;
 };
 
 struct File_555 {
-    vector <File_SG> referredBy;
+    vector <File_SG*> referredBy;
 };
 
 
