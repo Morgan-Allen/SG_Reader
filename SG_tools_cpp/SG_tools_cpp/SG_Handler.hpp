@@ -5,9 +5,12 @@
 //  Created by Morgan Allen on 09/11/2017.
 //  Copyright © 2017 Morgan Allen. All rights reserved.
 //
+#ifndef sg_handler
+#define sg_handler
 #include <stdio.h>
 #include <vector>
 #include <string>
+#include <SDL.h>
 using namespace std;
 
 
@@ -101,8 +104,11 @@ struct ImageRecord {
     byte animSpeedID;
     byte unknown8[5];
     
+    
     Bitmap* belongs;
     string label;
+    
+    SDL_Surface *imageData;
 };
 
 
@@ -119,7 +125,8 @@ struct File_555 {
 
 File_SG* readFile(string filename, bool report);
 
+ImageRecord* recordWithID(string label, File_SG* file);
 
 
-
+#endif
 

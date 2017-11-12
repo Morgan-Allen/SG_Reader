@@ -13,6 +13,14 @@
 
 
 
+ImageRecord* recordWithID(string label, File_SG* file) {
+    for (int i = 0; i < file->header.numRecords; i++) {
+        ImageRecord* r = file->records[i];
+        if (r->label.compare(label) == 0) return r;
+    }
+    return NULL;
+}
+
 
 
 File_SG* readFile(string filename, bool report) {
