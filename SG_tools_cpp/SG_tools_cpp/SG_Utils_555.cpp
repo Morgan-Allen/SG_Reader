@@ -343,6 +343,7 @@ SDL_Surface* imageFromBytes(Bytes* bytes, ImageRecord* record) {
     SDL_Surface* image = record->imageData = SDL_CreateRGBSurface(
         0, record->width, record->height, 32, 0, 0, 0, 0
     );
+    SDL_FillRect(image, NULL, 0x00000000);
     //
     //  Isometric images are actually stitched together from both a
     //  transparent upper and a diagonally-packed lower half, so they need
@@ -429,13 +430,6 @@ Bytes* bytesFromImage(ImageRecord* record, SDL_Surface* image) {
     store->data = clipped;
     return store;
 }
-
-
-
-
-
-
-
 
 
 

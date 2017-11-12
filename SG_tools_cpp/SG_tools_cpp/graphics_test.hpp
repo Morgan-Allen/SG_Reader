@@ -8,8 +8,11 @@
 #ifndef graphics_test
 #define graphics_test
 #include <SDL.h>
+#include <vector>
+using namespace std;
 
 
 int displayImage(SDL_Surface* image);
+int displayImages(vector <SDL_Surface*> images);
 
 #endif

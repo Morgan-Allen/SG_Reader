@@ -63,6 +63,11 @@ int bitAt(int index, int number) {
 }
 
 
+void saveImage(SDL_Surface* image, string savepath) {
+    SDL_SaveBMP(image, savepath.c_str());
+}
+
+
 
 
 void testFileIO(
@@ -130,6 +135,7 @@ void testImagePacking(
     printf("\n\nTesting image un/packing...");
     File_SG* file = readFile_SG(basePath + fileSG, report);
     string path555 = basePath + file555;
+    vector <SDL_Surface*> allImages;
     
     for (string ID : testImageIDs) {
         
@@ -143,12 +149,12 @@ void testImagePacking(
         Bytes* bytesIn = extractRawBytes(record, path555);
         SDL_Surface* loaded = imageFromBytes(bytesIn, record);
         if (loaded == NULL) continue;
-        //displayImage(loaded);
+        saveImage(loaded, outputDir + ID + "_loaded.bmp");
         
         Bytes* bytesOut = bytesFromImage(record, loaded);
-        //saveImage(loaded, outputDir+ID+"_loaded.png");
         SDL_Surface* packed = imageFromBytes(bytesOut, record);
-        displayImage(packed);
+        saveImage(packed, outputDir + ID + "_packed.bmp");
+        allImages.push_back(packed);
         
         //  TODO:  There's a problem here.  The isometric images actually
         //  create a copy of the original image and de-allocate the old version,
@@ -179,14 +185,15 @@ void testImagePacking(
     
     printf("\n");
     //handler.closeAllFileAccess();
+    
+    displayImages(allImages);
+    
 }
 
 
 
 
 /*
-
-
 static boolean checkImagesSame(BufferedImage in, BufferedImage out) {
     boolean allOK = true;
     
