@@ -7,11 +7,12 @@
 //
 
 #include "Testing.hpp"
+#include "graphics_test.hpp"
 #include <iostream>
 #include <fstream>
 #include <math.h>
 #include <cstdlib>
-#include "graphics_test.hpp"
+#include <sstream>
 
 
 
@@ -56,6 +57,47 @@ bool checkFilesSame(string basePath, string outputDir, string filename) {
     
     return checkPackingSame(bytesO, bytesR);
 }
+
+
+const char* descARGB(uint value) {
+    stringstream out;
+    out << "a " << ((value >> 24) & 0xff);
+    out << "r " << ((value >> 16) & 0xff);
+    out << "g " << ((value >> 8 ) & 0xff);
+    out << "b " << ((value >> 0 ) & 0xff);
+    return out.str().c_str();
+}
+
+
+bool checkImagesSame(SDL_Surface* in, SDL_Surface* out) {
+    bool allOK = true, pixOK = true;
+    
+    if (in->w != out->w) {
+        printf("\nDifferent width: %i -> %i", in->w, out->w);
+        allOK = false;
+    }
+    if (in->h != out->h) {
+        printf("\nDifferent height: %i -> %i", in->h, out->h);
+        allOK = false;
+    }
+    int maxWide = fmin(in->w, out->w);
+    int maxHigh = fmin(in->h, out->h);
+    
+    for (int y = 0; y < maxHigh && pixOK; y++) {
+        for (int x = 0; x < maxWide && pixOK; x++) {
+            uint VI = getRGB(in , x, y);
+            uint VO = getRGB(out, x, y);
+            if (VI != VO) {
+                printf("\n  Different at point: %i|%i", x, y);
+                printf("\n    In value:  %i, %s", VI, descARGB(VI));
+                printf("\n    Out value: %i, %s", VO, descARGB(VO));
+                allOK = pixOK = false;
+            }
+        }
+    }
+    return allOK;
+}
+
 
 
 int bitAt(int index, int number) {
@@ -142,9 +184,10 @@ void testImagePacking(
         ImageRecord* record = recordWithID(ID, file);
         if (record == NULL) continue;
         
-        //String sizeDesc  = "  Size: "+record.width+" x "+record.height;
-        //String bytesDesc = "  Bytes: "+record.dataLength;
-        //say("\n  Image: "+ID+sizeDesc+bytesDesc);
+        printf(
+            "\n\n  Image: %s  Size: %i x %i  Bytes: %i",
+            ID.c_str(), record->width, record->height, record->dataLength
+        );
         
         Bytes* bytesIn = extractRawBytes(record, path555);
         SDL_Surface* loaded = imageFromBytes(bytesIn, record);
@@ -164,13 +207,13 @@ void testImagePacking(
         
         printf("\n");
         dispX += 100;
-        /*
-        boolean imgSame = checkImagesSame(loaded, packed);
+        //*
+        bool imgSame = checkImagesSame(loaded, packed);
         if (imgSame) {
-            say("  Displayed images are identical.");
+            printf("  Displayed images are identical.");
         }
         else {
-            say("  Displayed images do not match.");
+            printf("  Displayed images do not match.");
         }
         //*/
         
@@ -194,39 +237,6 @@ void testImagePacking(
 
 
 /*
-static boolean checkImagesSame(BufferedImage in, BufferedImage out) {
-    boolean allOK = true;
-    
-    if (in.getWidth() != out.getWidth()) {
-        say("Different width: "+in.getWidth()+" -> "+out.getWidth());
-        allOK = false;
-    }
-    if (in.getHeight() != out.getHeight()) {
-        say("Different height: "+in.getHeight()+" -> "+out.getHeight());
-        allOK = false;
-    }
-    int maxWide = Math.min(in.getWidth (), out.getWidth ());
-    int maxHigh = Math.min(in.getHeight(), out.getHeight());
-    
-pixLoop: for (int y = 0; y < maxHigh; y++) {
-    for (int x = 0; x < maxWide; x++) {
-        int VI = in .getRGB(x, y);
-        int VO = out.getRGB(x, y);
-        if (VI != VO) {
-            Color inC  = new Color(VI);
-            Color outC = new Color(VO);
-            say("  Differ at point: "+x+"|"+y);
-            say("    In value:  "+VI+" "+inC );
-            say("    Out value: "+VO+" "+outC);
-            allOK = false;
-            break pixLoop;
-        }
-    }
-}
-    return allOK;
-}
-
-
 static void testImageSubstitution(
     String basePath, String fileSG, int version,
     String recordID, String savePath, String outputDir,

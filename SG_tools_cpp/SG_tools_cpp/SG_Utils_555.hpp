@@ -28,6 +28,10 @@ SDL_Surface* imageFromRecord(ImageRecord* record, string filename);
 
 Bytes* bytesFromImage(ImageRecord* record, SDL_Surface* image);
 
+
+uint getRGB(SDL_Surface* img, int x, int y);
+void setRGB(SDL_Surface* img, int x, int y, int val);
+
 int bytesToARGB(Bytes* bytes, int offset);
 void ARGBtoBytes(int ARGB, Bytes* store, int offset);
 
