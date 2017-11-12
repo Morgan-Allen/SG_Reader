@@ -11,7 +11,7 @@ using namespace std;
 
 
 
-int display_image(SDL_Surface* image) {
+int displayImage(SDL_Surface* image) {
     
     if (image == NULL) {
         printf("Image to display was not supplied!");

@@ -118,15 +118,22 @@ struct File_SG {
     vector <ImageRecord*> records;
 };
 
+
 struct File_555 {
     vector <File_SG*> referredBy;
 };
 
 
-File_SG* readFile(string filename, bool report);
 
 ImageRecord* recordWithID(string label, File_SG* file);
+File_SG* readFile_SG(string filename, bool report);
+void writeFile_SG(File_SG* file, string filepath, bool report);
 
 
 #endif
+
+
+
+
+
 

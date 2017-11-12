@@ -10,6 +10,6 @@
 #include <SDL.h>
 
 
-int display_image(SDL_Surface* image);
+int displayImage(SDL_Surface* image);
 
 #endif

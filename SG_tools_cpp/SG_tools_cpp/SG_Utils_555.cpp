@@ -23,12 +23,13 @@ bool packVerbose = false;
 
 
 
-struct Bytes {
-    byte* data;
-    int used = -1, capacity = -1;
-    
-    //Bytes(int capacity) { data = new byte[capacity]; }
-};
+Bytes* initBytes(int capacity) {
+    Bytes* b = new Bytes();
+    b->data     = new byte[capacity];
+    b->capacity = capacity;
+    b->used     = 0;
+    return b;
+}
 
 void say(string out) {
     cout << out;
@@ -47,10 +48,6 @@ const int
     MASK_B8 = BITS_8 << 0 
 ;
 
-
-
-
-
 //  TODO:  Also, remember to un/lock the surface to ensure safety when reading
 //  or writing:
 //  https://wiki.libsdl.org/SDL_Surface
@@ -58,7 +55,12 @@ const int
 uint getRGB(SDL_Surface* img, int x, int y) {
     byte* pixel = (byte*) img->pixels;
     pixel += (y * img->pitch) + (x * 4);
-    return (uint) (*pixel);
+    uint val = 0;
+    val |= pixel[0] << 0 ;
+    val |= pixel[1] << 8 ;
+    val |= pixel[2] << 16;
+    val |= pixel[3] << 24;
+    return val;
 }
 
 void setRGB(SDL_Surface* img, int x, int y, int val) {
@@ -313,13 +315,11 @@ static void isometricBasePass(
 
 
 
-Bytes* extractRawBytes(
-    ImageRecord* record, string filename
-) {
+Bytes* extractRawBytes(ImageRecord* record, string filepath) {
     //  TODO:  Derive this correctly.
     ///string filename = "";
     ifstream input;
-    input.open(filename);
+    input.open(filepath);
     
     //
     //  First, ensure that the record is accessible and allocate space for
@@ -327,16 +327,15 @@ Bytes* extractRawBytes(
     //  TODO:  In later versions of this format, there may be extra
     //  transparency pixels.  Check this.
     int dataLength = record->dataLength;
-    Bytes* bytes = new Bytes();
-    bytes->data = new byte[dataLength];
-    bytes->capacity = dataLength;
-    
+    Bytes* bytes = initBytes(dataLength);
     input.seekg(record->offset - (record->externalData != 0 ? 1 : 0));
     input.read((char*) bytes->data, dataLength);
     bytes->used = dataLength;
     
+    input.close();
     return bytes;
 }
+
 
 SDL_Surface* imageFromBytes(Bytes* bytes, ImageRecord* record) {
     //
@@ -372,6 +371,71 @@ SDL_Surface* imageFromRecord(ImageRecord* record, string filename) {
     Bytes* rawData = extractRawBytes(record, filename);
     return imageFromBytes(rawData, record);
 }
+
+
+
+
+Bytes* bytesFromImage(ImageRecord* record, SDL_Surface* image) {
+    //
+    //  If it hasn't been set already, store the image now:
+    record->imageData = image;
+    //
+    //  We allocate a buffer with some (hopefully) excess capacity for storing
+    //  the compressed image-
+    int capacity = record->width * record->height * 4;
+    Bytes* store = initBytes(capacity);
+    //
+    //  Isometric images are actually stitched together from both a
+    //  transparent upper and a diagonally-packed lower half, so they need
+    //  special treatment:
+    if (record->imageType == TYPE_ISOMETRIC) {
+        //
+        //  We create a copy of the image, since we will need to wipe certain
+        //  pixels as we go before creating transparency:
+        SDL_Surface* copy = SDL_CreateRGBSurface(
+            0, record->width, record->height, 32, 0, 0, 0, 0
+        );
+        SDL_BlitSurface(record->imageData, NULL, copy, NULL);
+        delete(record->imageData);
+        record->imageData = copy;
+        
+        isometricBasePass(store, record, true, true);
+        int done = store->used, maxY = isometricFringeHeight(record);
+        writeTransparentImage(record, store, done, maxY);
+        
+        //  TODO:  You'll need to create a new ImageRecord here?
+        record->lengthNoComp = done;
+        record->dataLength   = store->used;
+    }
+    //
+    //  Compression is used for any images with transparency, which means any
+    //  other walker-sprites in practice:
+    else if (record->compressed != 0) {
+        writeTransparentImage(record, store, 0, -1);
+        
+        //  TODO:  You'll need to create a new ImageRecord here?
+        record->dataLength = store->used;
+    }
+    //
+    //  And finally, plain images are stored without compression:
+    else {
+        plainImagePass(store, record, true);
+    }
+    //
+    //  Finally, we trim the buffer down to size and return-
+    byte* clipped = new byte[store->used];
+    memcpy(clipped, store->data, store->used);
+    delete[] store->data;
+    store->data = clipped;
+    return store;
+}
+
+
+
+
+
+
+
 
 
 
