@@ -15,20 +15,22 @@ using namespace std;
 
 
 
-//  Check these references:
-//  https://wiki.libsdl.org/SDL_CreateRGBSurfaceFrom
 
 const int TYPE_ISOMETRIC = 30;
 bool packVerbose = false;
 
-
-
 Bytes* initBytes(int capacity) {
+    if (capacity <= 0) return NULL;
     Bytes* b = new Bytes();
     b->data     = new byte[capacity];
     b->capacity = capacity;
     b->used     = 0;
     return b;
+}
+
+void deleteBytes(Bytes* bytes) {
+    delete[] bytes->data;
+    delete bytes;
 }
 
 void say(string out) {
@@ -47,10 +49,6 @@ const int
     MASK_G8 = BITS_8 << 8 ,
     MASK_B8 = BITS_8 << 0 
 ;
-
-//  TODO:  Also, remember to un/lock the surface to ensure safety when reading
-//  or writing:
-//  https://wiki.libsdl.org/SDL_Surface
 
 uint getRGB(SDL_Surface* img, int x, int y) {
     byte* pixel = (byte*) img->pixels;
@@ -95,6 +93,10 @@ void ARGBtoBytes(int ARGB, Bytes* store, int offset) {
     store->used = offset + 2;
 }
 
+void toggle555Verbose(bool verbose) {
+    packVerbose = verbose;
+}
+
 
 
 
@@ -135,7 +137,7 @@ void readTransparentImage(
         if (c == 255) {
             //  The next byte is the number of pixels to skip
             int skip = bytes->data[i++];
-            //if (report) say("    Gap  x"+skip+", index: "+(i - 2));
+            if (report) printf("\n  Gap x%i, index: %i", skip, (i - 2));
             
             x += skip;
             while (x >= width) {
@@ -145,7 +147,7 @@ void readTransparentImage(
         }
         else {
             //  `c' is the number of image data bytes
-            //if (report) say("    Fill x"+c+", index: "+(i - 1));
+            if (report) printf("\n  Fill x%i, index: %i", c, (i - 1));
             
             for (j = 0; j < c && i < maxRead; j++, i += 2) {
                 int ARGB = bytesToARGB(bytes, i);
@@ -191,12 +193,10 @@ void writeTransparentImage(
                 gapCount++;
                 
                 if (gapCount == MAX_GAP || atEnd || ! nextEmpty) {
-                    /*
                     if (report) {
-                        say("    Encoding gap of length "+gapCount+"/"+MAX_GAP);
-                        say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high+" index: "+index);
+                        printf("\n\n  Encoding gap of length %i/%i", gapCount, MAX_GAP);
+                        printf("\n      X: %i/%i  Y: %i/%i index: %i", x, wide, y, high, index);
                     }
-                    //*/
                     store->data[index++] = (byte) 0xff;
                     store->data[index++] = (byte) gapCount;
                     store->used = index;
@@ -207,12 +207,11 @@ void writeTransparentImage(
                 fillBuffer[fillCount++] = pixel;
                 
                 if (fillCount == MAX_FILL || atEnd || nextEmpty) {
-                    /*
                     if (report) {
-                        say("\n    Pixel-fill ended with size "+fillCount+"/"+MAX_FILL);
-                        say("      X: "+x+"/"+wide+"  Y: "+y+"/"+high+" index: "+index);
+                        printf("\n\n  Pixel-fill ended with size %i/%i", fillCount, MAX_FILL);
+                        printf("\n      X: %i/%i  Y: %i/%i index: %i", x, wide, y, high, index);
                     }
-                    //*/
+                    
                     store->data[index++] = (byte) fillCount;
                     for (int i = 0; i < fillCount; i++) {
                         ARGBtoBytes(fillBuffer[i], store, index);
@@ -315,12 +314,10 @@ static void isometricBasePass(
 
 
 
+
 Bytes* extractRawBytes(ImageRecord* record, string filepath) {
-    //  TODO:  Derive this correctly.
-    ///string filename = "";
     ifstream input;
     input.open(filepath);
-    
     //
     //  First, ensure that the record is accessible and allocate space for
     //  extracting the data:
@@ -344,6 +341,7 @@ SDL_Surface* imageFromBytes(Bytes* bytes, ImageRecord* record) {
         0, record->width, record->height, 32, 0, 0, 0, 0
     );
     SDL_FillRect(image, NULL, 0x00000000);
+    //SDL_LockSurface(image);
     //
     //  Isometric images are actually stitched together from both a
     //  transparent upper and a diagonally-packed lower half, so they need
@@ -364,12 +362,16 @@ SDL_Surface* imageFromBytes(Bytes* bytes, ImageRecord* record) {
     else {
         plainImagePass(bytes, record, false);
     }
+    //
+    //  Unlock the surface and return:
+    //SDL_UnlockSurface(image);
     return image;
 }
 
 
-SDL_Surface* imageFromRecord(ImageRecord* record, string filename) {
-    Bytes* rawData = extractRawBytes(record, filename);
+SDL_Surface* imageFromRecord(ImageRecord* record) {
+    if (record->file555 == NULL) return NULL;
+    Bytes* rawData = extractRawBytes(record, record->file555->fullpath);
     return imageFromBytes(rawData, record);
 }
 
@@ -379,6 +381,7 @@ SDL_Surface* imageFromRecord(ImageRecord* record, string filename) {
 Bytes* bytesFromImage(ImageRecord* record, SDL_Surface* image) {
     //
     //  If it hasn't been set already, store the image now:
+    //SDL_LockSurface(image);
     record->imageData = image;
     //
     //  We allocate a buffer with some (hopefully) excess capacity for storing
@@ -397,7 +400,10 @@ Bytes* bytesFromImage(ImageRecord* record, SDL_Surface* image) {
             0, record->width, record->height, 32, 0, 0, 0, 0
         );
         SDL_BlitSurface(record->imageData, NULL, copy, NULL);
-        delete(record->imageData);
+        //SDL_UnlockSurface(record->imageData);
+        SDL_FreeSurface  (record->imageData);
+        
+        //SDL_LockSurface(copy);
         record->imageData = copy;
         
         isometricBasePass(store, record, true, true);
@@ -423,14 +429,14 @@ Bytes* bytesFromImage(ImageRecord* record, SDL_Surface* image) {
         plainImagePass(store, record, true);
     }
     //
-    //  Finally, we trim the buffer down to size and return-
+    //  Finally, we trim the buffer down to size, clean up and return-
     byte* clipped = new byte[store->used];
     memcpy(clipped, store->data, store->used);
     delete[] store->data;
     store->data = clipped;
+    //SDL_UnlockSurface(record->imageData);
     return store;
 }
-
 
 
 

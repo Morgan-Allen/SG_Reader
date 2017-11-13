@@ -43,21 +43,36 @@ bool checkPackingSame(Bytes* in, Bytes* out) {
 bool checkFilesSame(string basePath, string outputDir, string filename) {
     
     ifstream original, rewrite;
-    original.open(basePath  + filename);
-    rewrite .open(outputDir + filename);
+    original.open(basePath  + filename, ifstream::ate);
+    rewrite .open(outputDir + filename, ifstream::ate);
     
     Bytes* bytesO = initBytes((int) original.tellg());
     Bytes* bytesR = initBytes((int) rewrite .tellg());
     
+    if (bytesO == NULL || bytesR == NULL) {
+        printf("\n  One or more files does not exist!");
+        return false;
+    }
+    
+    original.seekg(0);
+    rewrite .seekg(0);
     original.read((char*) bytesO->data, bytesO->capacity);
     rewrite .read((char*) bytesR->data, bytesR->capacity);
     
     original.close();
     rewrite .close();
     
-    return checkPackingSame(bytesO, bytesR);
+    bool same = checkPackingSame(bytesO, bytesR);
+    
+    deleteBytes(bytesO);
+    deleteBytes(bytesR);
+    return same;
 }
 
+
+string bitAt(int index, int number) {
+    return ((number & (1 << index)) == 0) ? "0" : "1";
+}
 
 const char* descARGB(uint value) {
     stringstream out;
@@ -70,6 +85,8 @@ const char* descARGB(uint value) {
 
 
 bool checkImagesSame(SDL_Surface* in, SDL_Surface* out) {
+    //SDL_LockSurface(in );
+    //SDL_LockSurface(out);
     bool allOK = true, pixOK = true;
     
     if (in->w != out->w) {
@@ -95,15 +112,11 @@ bool checkImagesSame(SDL_Surface* in, SDL_Surface* out) {
             }
         }
     }
+    
+    //SDL_UnlockSurface(in );
+    //SDL_UnlockSurface(out);
     return allOK;
 }
-
-
-
-int bitAt(int index, int number) {
-    return ((number & (1 << index)) == 0) ? 0 : 1;
-}
-
 
 void saveImage(SDL_Surface* image, string savepath) {
     SDL_SaveBMP(image, savepath.c_str());
@@ -117,7 +130,7 @@ void testFileIO(
 ) {
     printf("\nTesting basic file I/O...");
     
-    File_SG* file = readFile_SG(basePath + fileSG, report);
+    File_SG* file = lookupFile_SG(basePath, fileSG, report);
     writeFile_SG(file, outputDir + fileSG, report);
     
     printf("\n  Total records: %i, used: %i", file->header.numRecords, file->header.recordsUsed);
@@ -134,7 +147,7 @@ void testFileIO(
 
 void testImagePacking(
     string basePath, string outputDir,
-    string fileSG, string file555, int version,
+    string fileSG, int version,
     vector <string> testImageIDs, bool report
 ) {
     //
@@ -170,26 +183,26 @@ void testImagePacking(
     else {
         printf("\n  Bytes not packed correctly!");
     }
+    deleteBytes(testIn );
+    deleteBytes(testOut);
     
     //
     //  Then, we test the full range of test images supplied:
-    int dispX = 200;
     printf("\n\nTesting image un/packing...");
-    File_SG* file = readFile_SG(basePath + fileSG, report);
-    string path555 = basePath + file555;
+    File_SG* file = lookupFile_SG(basePath, fileSG, report);
     vector <SDL_Surface*> allImages;
     
     for (string ID : testImageIDs) {
         
         ImageRecord* record = recordWithID(ID, file);
-        if (record == NULL) continue;
+        if (record == NULL || record->file555 == NULL) continue;
         
         printf(
             "\n\n  Image: %s  Size: %i x %i  Bytes: %i",
             ID.c_str(), record->width, record->height, record->dataLength
         );
         
-        Bytes* bytesIn = extractRawBytes(record, path555);
+        Bytes* bytesIn = extractRawBytes(record, record->file555->fullpath);
         SDL_Surface* loaded = imageFromBytes(bytesIn, record);
         if (loaded == NULL) continue;
         saveImage(loaded, outputDir + ID + "_loaded.bmp");
@@ -206,8 +219,7 @@ void testImagePacking(
         //SDL_FreeSurface(packed);
         
         printf("\n");
-        dispX += 100;
-        //*
+        
         bool imgSame = checkImagesSame(loaded, packed);
         if (imgSame) {
             printf("  Displayed images are identical.");
@@ -215,7 +227,6 @@ void testImagePacking(
         else {
             printf("  Displayed images do not match.");
         }
-        //*/
         
         bool packSame = checkPackingSame(bytesIn, bytesOut);
         if (packSame) {
@@ -227,75 +238,46 @@ void testImagePacking(
     }
     
     printf("\n");
-    //handler.closeAllFileAccess();
     
     displayImages(allImages);
-    
 }
 
 
 
-
-/*
-static void testImageSubstitution(
-    String basePath, String fileSG, int version,
-    String recordID, String savePath, String outputDir,
-    String... testFilenames
+void testImageSubstitution(
+    string basePath, string fileSG, int version,
+    string recordID, string newImgPath, string outputDir,
+    vector <string> testFilenames
 ) {
-    say("\nTesting file-record substitution...");
+    printf("\nTesting file-record substitution...");
     
-    BufferedImage extract = unpackSingleImage(
-        basePath, fileSG, version, recordID
-    );
-    saveImage(extract, savePath);
+    //  First, identify the record in question, and save a copy to a temporary
+    //  location-
+    File_SG* file = lookupFile_SG(basePath, fileSG, false);
+    ImageRecord *record = recordWithID(recordID, file);
+    if (record == NULL) {
+        printf("\n  No such image record: %s", recordID.c_str());
+    }
+    
+    SDL_Surface *toSave = imageFromRecord(record);
+    SDL_SaveBMP(toSave, newImgPath.c_str());
+    
     replaceSingleImage(
-        basePath, fileSG, version, recordID, savePath, outputDir
+        basePath, fileSG, version, recordID, newImgPath, outputDir
     );
     
     //  Now verify that the SG files in question are identical-
-    for (String filename : testFilenames) {
-        boolean same = checkFilesSame(basePath, outputDir, filename);
+    for (string filename : testFilenames) {
+        bool same = checkFilesSame(basePath, outputDir, filename);
         if (same) {
-            say("  "+filename+" identical in output directory.");
+            printf("\n  %s identical in output directory.", filename.c_str());
         }
         else {
-            say("  "+filename+" is not identical.");
+            printf("\n  %s is not identical.", filename.c_str());
         }
     }
+    printf("\n\n");
 }
-
-
-
-const string
-    C3_DIR_PATH = "C:/Program Files (x86)/GOG Galaxy/Games/Caesar 3/"
-;
-
-
-void runTests() {
-    
-    testFileIO(C3_DIR_PATH, "output_test/", "C3_North.sg2", VERSION_C3);
-    
-    final String testImageIDs[] = {
-        "empire_panels_3",
-        "Carts_692",
-        "Govt_0",
-        "Govt_9",
-        "Housng1a_42",
-        "Housng1a_47",
-    };
-    testImagePacking(
-        C3_DIR_PATH, "output_test/", "C3.sg2", VERSION_C3, testImageIDs
-    );
-    
-    testImageSubstitution(
-        C3_DIR_PATH, "C3.sg2", VERSION_C3,
-        "Housng1a_42", "output_test/temp_house_42.png", "output_test/",
-        "C3.sg2",
-        "C3.555"
-    );
-}
-//*/
-
 
 
 

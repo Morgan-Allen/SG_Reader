@@ -25,8 +25,9 @@ int main(int numArgs, const char *args[]) {
     string outPath  = rootPath + "SG Tools Project/output_test/";
     
     
+    //toggle555Verbose(true);
     //*
-    //testFileIO(basePath, outPath, "C3.sg2", VERSION_C3, false);
+    testFileIO(basePath, outPath, "C3.sg2", VERSION_C3, false);
     
     vector <string> testFiles = {
         "empire_panels.bmp_3",
@@ -37,40 +38,24 @@ int main(int numArgs, const char *args[]) {
         "Housng1a.bmp_47"
     };
     testImagePacking(
-        basePath, outPath, "C3.sg2", "C3.555", VERSION_C3,
+        basePath, outPath, "C3.sg2", VERSION_C3,
         testFiles, false
     );
-    
     //*/
     
-    
-    /*
-    File_SG* file = readFile_SG(basePath + "C3.sg2", false);
-    string path555 = basePath + "C3.555";
-    
-    string testFiles[] = {
-        "empire_panels.bmp_3",
-        "Carts.bmp_692",
-        "Govt.bmp_0",
-        "Govt.bmp_9",
-        "Housng1a.bmp_42",
-        "Housng1a.bmp_47"
+    vector <string> filesChanged = {
+      "C3.sg2",
+      "C3.555"
     };
-    
-    for (string recordID : testFiles) {
-        ImageRecord *record1 = recordWithID(recordID, file);
-        SDL_Surface *image = imageFromRecord(record1, path555);
-        displayImage(image);
-        SDL_FreeSurface(image);
-    }
-    //  TODO:  Consider passing in a vector of images at once and displaying
-    //  them all on the same pane.
-    
-    delete file;
-    //*/
+    testImageSubstitution(
+        basePath, "C3.sg2", VERSION_C3,
+        "Housng1a.bmp_42", outPath + "temp_house_42.bmp",
+        outPath, filesChanged
+    );
     
     return 0;
 }
+
 
 
 

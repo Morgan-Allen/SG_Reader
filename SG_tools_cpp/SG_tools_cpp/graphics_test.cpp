@@ -15,16 +15,20 @@ using namespace std;
 
 int displayImages(vector <SDL_Surface*> images) {
     
+    // Determine a good bounding window and placements for the images we're
+    // given-
     int maxWide = 640, maxLineHigh = 0;
     int totWide = 0, totHigh = 0, x = 0, y = 0;
     vector <SDL_Rect> imgRects;
     
     for (SDL_Surface* image : images) {
+        
         SDL_Rect rect;
         rect.x = x;
         rect.y = y;
         rect.w = image->w;
         rect.h = image->h;
+        
         imgRects.push_back(rect);
         maxLineHigh = fmax(maxLineHigh, rect.h);
         
@@ -38,7 +42,6 @@ int displayImages(vector <SDL_Surface*> images) {
             maxLineHigh = 0;
         }
     }
-    
     
     // Create an application window with the following settings:
     SDL_Init(SDL_INIT_VIDEO);

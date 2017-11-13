@@ -13,6 +13,7 @@
 #include <SDL.h>
 #include "SG_Handler.hpp"
 #include "SG_Utils_555.hpp"
+#include "SG_Utils_IO.hpp"
 
 
 
@@ -23,8 +24,14 @@ void testFileIO(
 
 void testImagePacking(
     string basePath, string outputDir,
-    string fileSG, string file555, int version,
+    string fileSG, int version,
     vector <string> testImageIDs, bool report
+);
+
+void testImageSubstitution(
+    string basePath, string fileSG, int version,
+    string recordID, string newImgPath,
+    string outputDir, vector <string> testFilenames
 );
 
 

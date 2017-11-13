@@ -41,6 +41,8 @@ const int
 struct SG_Header;
 struct Bitmap;
 struct ImageRecord;
+struct File_SG;
+struct File_555;
 
 
 struct SG_Header {
@@ -57,6 +59,8 @@ struct SG_Header {
     uint unknown3[11];
     
     ushort index[300];
+    
+    File_SG* file;
 };
 
 
@@ -72,6 +76,10 @@ struct Bitmap {
     byte unknown[64];
     
     vector <ImageRecord*> records;
+    File_SG* file;
+    string name;
+    string comment;
+    string namePaired555;
 };
 
 
@@ -104,10 +112,12 @@ struct ImageRecord {
     byte animSpeedID;
     byte unknown8[5];
     
-    
+    File_SG* file;
     Bitmap* belongs;
+    int offsetInsideSG;
     string label;
     
+    File_555* file555;
     SDL_Surface *imageData;
 };
 
@@ -116,21 +126,41 @@ struct File_SG {
     SG_Header header;
     Bitmap bitmaps[SG_NUM_BITMAPS];
     vector <ImageRecord*> records;
+    vector <File_555*> refers;
+    
+    string filename;
+    string fullpath;
+    string namePaired555;
 };
 
 
 struct File_555 {
+    vector <ImageRecord*> records;
     vector <File_SG*> referredBy;
+    
+    string filename;
+    string fullpath;
 };
 
 
 
 ImageRecord* recordWithID(string label, File_SG* file);
-File_SG* readFile_SG(string filename, bool report);
+
+File_SG* lookupFile_SG(string basePath, string filename, bool report);
+
 void writeFile_SG(File_SG* file, string filepath, bool report);
+
+void copyAndModifyFile_SG(File_SG* file, vector <ImageRecord*> changed, string outputDir);
 
 
 #endif
+
+
+
+
+
+
+
 
 
 

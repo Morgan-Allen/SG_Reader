@@ -14,18 +14,20 @@
 
 
 
+
 struct Bytes {
     byte* data;
     int used = -1, capacity = -1;
 };
 
 Bytes* initBytes(int capacity);
+void deleteBytes(Bytes* bytes);
+void toggle555Verbose(bool verbose);
 
 
 Bytes* extractRawBytes(ImageRecord* record, string filename);
 SDL_Surface* imageFromBytes(Bytes* bytes, ImageRecord* record);
-SDL_Surface* imageFromRecord(ImageRecord* record, string filename);
-
+SDL_Surface* imageFromRecord(ImageRecord* record);
 Bytes* bytesFromImage(ImageRecord* record, SDL_Surface* image);
 
 
