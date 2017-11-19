@@ -18,8 +18,16 @@ public class SG_Utils555 {
   /**  Some initial constants and utility containers:
     */
   final static int
-    TYPE_ISOMETRIC = 30
+    TYPE_ISOMETRIC = 30  ,
+    
+    TILE_WIDE      = 58  ,
+    TILE_HIGH      = 30  ,
+    TILE_BYTES     = 1800,
+    BIG_TILE_WIDE  = 78  ,
+    BIG_TILE_HIGH  = 40  ,
+    BIG_TILE_BYTES = 3200
   ;
+  
   static boolean packVerbose = false;
   
   
@@ -373,16 +381,6 @@ public class SG_Utils555 {
   
   /**  Utilities for reading/writing isometric pixels-
     */
-  final static int
-    TILE_WIDE      = 58  ,
-    TILE_HIGH      = 30  ,
-    TILE_BYTES     = 1800,
-    BIG_TILE_WIDE  = 78  ,
-    BIG_TILE_HIGH  = 40  ,
-    BIG_TILE_BYTES = 3200
-  ;
-  
-  
   static int isometricFringeHeight(ImageRecord r) {
     BufferedImage store = r.extracted;
     int wide     = store.getWidth();
